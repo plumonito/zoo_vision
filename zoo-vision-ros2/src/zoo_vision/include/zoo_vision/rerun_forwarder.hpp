@@ -13,20 +13,17 @@
 // zoo_vision. If not, see <https://www.gnu.org/licenses/>.
 
 #include "rclcpp/rclcpp.hpp"
-#include "zoo_vision/rerun_forwarder.hpp"
-#include "zoo_vision/zoo_camera.hpp"
-#include <memory>
+#include <image_transport/image_transport.hpp>
+#include <rerun/recording_stream.hpp>
 
-int main(int argc, char *argv[]) {
-  rclcpp::init(argc, argv);
-  rclcpp::executors::SingleThreadedExecutor exec;
-  rclcpp::NodeOptions options;
-  auto camera_node = std::make_shared<zoo::ZooCamera>(options);
-  auto rerun_node = std::make_shared<zoo::RerunForwarder>(options);
+namespace zoo {
+class RerunForwarder : public rclcpp::Node {
+public:
+  explicit RerunForwarder(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
 
-  exec.add_node(camera_node);
-  exec.add_node(rerun_node);
-  exec.spin();
-  rclcpp::shutdown();
-  return 0;
-}
+  void onImage(const sensor_msgs::msg::Image::ConstSharedPtr &);
+
+  rerun::RecordingStream rerunStream_;
+  image_transport::Subscriber imageSubscriber_;
+};
+} // namespace zoo

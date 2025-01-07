@@ -14,6 +14,7 @@
 
 #include "zoo_vision/zoo_camera.hpp"
 
+#include "rclcpp/time.hpp"
 #include <chrono>
 using namespace std::chrono_literals;
 
@@ -38,10 +39,10 @@ ZooCamera::ZooCamera(const rclcpp::NodeOptions &options) : Node("input_camera", 
   frameIndex_ = 0;
 
   publisher_ = image_transport::create_publisher(this, "input_camera/image");
-  timer_ = create_wall_timer(30ms, std::bind(&ZooCamera::on_timer, this));
+  timer_ = create_wall_timer(30ms, [this]() { this->onTimer(); });
 }
 
-void ZooCamera::on_timer() {
+void ZooCamera::onTimer() {
   cv::Mat image;
   if (cvStream_.isOpened()) {
     cvStream_ >> image;
@@ -55,8 +56,10 @@ void ZooCamera::on_timer() {
     image = cv::Mat3b(cv::Size(500, 500), cv::Vec3b(0, 0, 255));
   }
 
-  std_msgs::msg::Header hdr;
-  sensor_msgs::msg::Image::SharedPtr msg = cv_bridge::CvImage(hdr, "bgr8", image).toImageMsg();
+  std_msgs::msg::Header header;
+  header.stamp = now();
+
+  sensor_msgs::msg::Image::SharedPtr msg = cv_bridge::CvImage(header, "bgr8", image).toImageMsg();
   publisher_.publish(msg);
 }
 

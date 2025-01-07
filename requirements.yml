@@ -12,3 +12,4 @@ dependencies:
 - ipython
 - enlighten
 - statsmodels
+- rerun-sdk==0.21.0
