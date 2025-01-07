@@ -21,18 +21,40 @@ using namespace std::chrono_literals;
 #include "opencv2/core/mat.hpp"
 #include "opencv2/imgcodecs.hpp"
 
+namespace {
+const std::string DEFAULT_VIDEO_URL = "data/sample_video.mp4";
+}
 namespace zoo {
 
 ZooCamera::ZooCamera(const rclcpp::NodeOptions &options) : Node("input_camera", options) {
+  videoUrl_ = declare_parameter<std::string>("videoUrl", DEFAULT_VIDEO_URL);
+
+  bool ok = cvStream_.open(videoUrl_);
+  if (ok) {
+    RCLCPP_INFO(get_logger(), "Opened video %s", videoUrl_.c_str());
+  } else {
+    RCLCPP_ERROR(get_logger(), "Failed to open video %s", videoUrl_.c_str());
+  }
+  frameIndex_ = 0;
+
   publisher_ = image_transport::create_publisher(this, "input_camera/image");
-  timer_ = create_wall_timer(500ms, std::bind(&ZooCamera::on_timer, this));
+  timer_ = create_wall_timer(30ms, std::bind(&ZooCamera::on_timer, this));
 }
 
 void ZooCamera::on_timer() {
-  cv::Mat image = cv::imread("data/sample_frame.png", cv::IMREAD_COLOR);
+  cv::Mat image;
+  if (cvStream_.isOpened()) {
+    cvStream_ >> image;
+    if (image.empty()) {
+      RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 500, "Video EOF, restarting");
+      cvStream_.set(cv::CAP_PROP_POS_FRAMES, 0);
+      cvStream_ >> image;
+    }
+  }
   if (image.empty()) {
     image = cv::Mat3b(cv::Size(500, 500), cv::Vec3b(0, 0, 255));
   }
+
   std_msgs::msg::Header hdr;
   sensor_msgs::msg::Image::SharedPtr msg = cv_bridge::CvImage(hdr, "bgr8", image).toImageMsg();
   publisher_.publish(msg);

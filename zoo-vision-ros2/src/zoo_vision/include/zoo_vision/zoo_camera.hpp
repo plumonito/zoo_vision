@@ -15,12 +15,17 @@
 #include "rclcpp/rclcpp.hpp"
 #include <image_transport/camera_publisher.hpp>
 #include <image_transport/image_transport.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
 namespace zoo {
 class ZooCamera : public rclcpp::Node {
 public:
   explicit ZooCamera(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
   void on_timer();
+
+  std::string videoUrl_;
+  cv::VideoCapture cvStream_;
+  size_t frameIndex_;
 
   image_transport::Publisher publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
