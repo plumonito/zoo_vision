@@ -9,17 +9,27 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
-find_package( OpenCV REQUIRED )
+find_package( OpenCV 4.6.0 EXACT REQUIRED )
 
-add_executable(${PROJECT_NAME} include/${PROJECT_NAME}/zoo_camera.hpp
-  src/zoo_camera.cpp)
+add_executable(${PROJECT_NAME} 
+  # Headers
+  include/${PROJECT_NAME}/zoo_camera.hpp
+  # Sources
+  src/zoo_camera.cpp
+  src/main.cpp)
 
-  ament_target_dependencies(${PROJECT_NAME}
-  "rclcpp"
-  "cv_bridge" OpenCV)
+target_include_directories(${PROJECT_NAME} PUBLIC include)
+
+ament_target_dependencies(${PROJECT_NAME}
+  rclcpp
+  rclcpp_components
+  image_transport
+  cv_bridge
+  OpenCV)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

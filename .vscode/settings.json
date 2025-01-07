@@ -1,0 +1,3 @@
+{
+    "cmake.sourceDirectory": "${workspaceFolder}/zoo-vision-ros2/src/zoo_vision",
+}
