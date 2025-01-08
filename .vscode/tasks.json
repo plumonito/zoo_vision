@@ -12,5 +12,16 @@
             "problemMatcher": [],
             "detail": "CMake template build task"
         },
+        {
+            "type": "shell",
+            "label": "Colcon: build",
+            "command": "colcon build --symlink-install",
+            "group": "build",
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}/zoo-vision-ros2"
+            },
+            "detail": "Colcon build all packages task"
+        },
     ]
 }
