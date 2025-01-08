@@ -43,21 +43,26 @@ ZooCamera::ZooCamera(const rclcpp::NodeOptions &options) : Node("input_camera", 
 }
 
 void ZooCamera::onTimer() {
+  std_msgs::msg::Header header;
+  header.stamp = now();
+
   cv::Mat image;
   if (cvStream_.isOpened()) {
     cvStream_ >> image;
     if (image.empty()) {
       RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 500, "Video EOF, restarting");
       cvStream_.set(cv::CAP_PROP_POS_FRAMES, 0);
+      frameIndex_ = 0;
       cvStream_ >> image;
     }
+    header.frame_id = std::to_string(frameIndex_);
+
+    frameIndex_++;
   }
   if (image.empty()) {
+    header.frame_id = "error";
     image = cv::Mat3b(cv::Size(500, 500), cv::Vec3b(0, 0, 255));
   }
-
-  std_msgs::msg::Header header;
-  header.stamp = now();
 
   sensor_msgs::msg::Image::SharedPtr msg = cv_bridge::CvImage(header, "bgr8", image).toImageMsg();
   publisher_.publish(msg);

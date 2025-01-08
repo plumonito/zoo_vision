@@ -21,11 +21,11 @@ int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
   rclcpp::executors::SingleThreadedExecutor exec;
   rclcpp::NodeOptions options;
-  auto camera_node = std::make_shared<zoo::ZooCamera>(options);
-  // auto rerun_node = std::make_shared<zoo::RerunForwarder>(options);
+  // auto camera_node = std::make_shared<zoo::ZooCamera>(options);
+  auto rerun_node = std::make_shared<zoo::RerunForwarder>(options);
 
-  exec.add_node(camera_node);
-  // exec.add_node(rerun_node);
+  // exec.add_node(camera_node);
+  exec.add_node(rerun_node);
   exec.spin();
   rclcpp::shutdown();
   return 0;

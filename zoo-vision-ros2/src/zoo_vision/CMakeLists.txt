@@ -20,6 +20,8 @@ include(FetchContent)
 FetchContent_Declare(rerun_sdk URL https://github.com/rerun-io/rerun/releases/download/0.21.0/rerun_cpp_sdk.zip)
 FetchContent_MakeAvailable(rerun_sdk)
 
+####################################
+# zoo_vision package
 add_executable(${PROJECT_NAME} 
   # Headers
   include/${PROJECT_NAME}/zoo_camera.hpp
@@ -40,6 +42,29 @@ ament_target_dependencies(${PROJECT_NAME}
   OpenCV
 )
 target_link_libraries(${PROJECT_NAME} rerun_sdk)
+####################################
+
+####################################
+# zoo-vision2 package
+add_executable(zoo_vision2
+  # Headers
+  include/${PROJECT_NAME}/rerun_forwarder.hpp
+  # Sources
+  src/rerun_forwarder.cpp
+  src/main2.cpp)
+
+target_include_directories(zoo_vision2 PUBLIC include)
+target_compile_features(zoo_vision2 PUBLIC cxx_std_20)
+
+ament_target_dependencies(zoo_vision2
+  rclcpp
+  rclcpp_components
+  image_transport
+  cv_bridge
+  OpenCV
+)
+target_link_libraries(zoo_vision2 rerun_sdk)
+####################################
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

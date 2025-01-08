@@ -56,8 +56,10 @@ RerunForwarder::RerunForwarder(const rclcpp::NodeOptions &options)
 void RerunForwarder::onImage(const sensor_msgs::msg::Image::ConstSharedPtr &msgPtr) {
   const auto &msg = *msgPtr;
   auto time = timeFromRosTime(msg.header.stamp);
-  RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Received img (time=%s)",
-                       std::format("{:%Y-%m-%d %H:%M:%S}", time).c_str());
+  // RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Received img (time=%s)",
+  //                      std::format("{:%Y-%m-%d %H:%M:%S}", time).c_str());
+  RCLCPP_INFO(get_logger(), "Received img (time=%s, id=%s)", std::format("{:%Y-%m-%d %H:%M:%S}", time).c_str(),
+              msg.header.frame_id.c_str());
 
   rerunStream_.set_time("camera", time);
   rerun::Image rerunImage(msg.data, {msg.width, msg.height}, rerun::datatypes::ColorModel::BGR,
