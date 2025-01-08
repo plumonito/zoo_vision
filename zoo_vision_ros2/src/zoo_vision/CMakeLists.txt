@@ -26,7 +26,9 @@ add_executable(${PROJECT_NAME}
   # Headers
   include/${PROJECT_NAME}/zoo_camera.hpp
   include/${PROJECT_NAME}/rerun_forwarder.hpp
+  include/zoo_vision/utils.hpp
   # Sources
+  src/utils.cpp
   src/zoo_camera.cpp
   src/rerun_forwarder.cpp
   src/main.cpp)

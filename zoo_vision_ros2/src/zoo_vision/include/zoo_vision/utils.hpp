@@ -12,22 +12,10 @@
 // You should have received a copy of the GNU General Public License along with
 // zoo_vision. If not, see <https://www.gnu.org/licenses/>.
 
-#include "rclcpp/rclcpp.hpp"
-#include <image_transport/camera_publisher.hpp>
-#include <image_transport/image_transport.hpp>
-#include <opencv2/highgui/highgui.hpp>
+#include <filesystem>
 
 namespace zoo {
-class ZooCamera : public rclcpp::Node {
-public:
-  explicit ZooCamera(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
-  void onTimer();
 
-  std::string videoUrl_;
-  cv::VideoCapture cvStream_;
-  size_t frameIndex_;
+std::filesystem::path getDataPath();
 
-  image_transport::Publisher publisher_;
-  rclcpp::TimerBase::SharedPtr timer_;
-};
 } // namespace zoo

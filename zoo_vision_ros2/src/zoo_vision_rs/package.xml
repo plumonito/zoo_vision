@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model
+   href="http://download.ros.org/schema/package_format3.xsd"
+   schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>zoo_vision_rs</name>
+  <version>0.4.1</version>
+  <description>zoo-vision rust package.</description>
+  <maintainer email="daniel.herrera.castro@gmail.com">Daniel Herrera C.</maintainer>
+  <license>GPL-3.0-only</license>
+
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>rclrs</build_depend>
+  <build_depend>rosidl_runtime_rs</build_depend>
+
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>rclrs</exec_depend>
+  <exec_depend>rosidl_runtime_rs</exec_depend>
+
+  <export>
+    <build_type>ament_cargo</build_type>
+  </export>
+</package>
