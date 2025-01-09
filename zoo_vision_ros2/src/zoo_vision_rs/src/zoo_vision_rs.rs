@@ -45,3 +45,26 @@ pub extern "C" fn zoo_rs_test_me(p_client: *mut RerunForwarder, frame_id: *const
         }
     }
 }
+
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn zoo_rs_image_callback(
+    p_client: *mut RerunForwarder,
+    msg: *const zoo_msgs::msg::rmw::Image12m,
+) -> u32 {
+    if p_client.is_null() {
+        return ZOO_VISION_ERROR;
+    }
+
+    let client: &mut RerunForwarder = unsafe { &mut *p_client };
+    let msg = unsafe { &*msg };
+
+    let result = client.image_callback(msg);
+    match result {
+        Ok(_) => ZOO_VISION_OK,
+        Err(e) => {
+            println!("zoo_vision_rs: Error logging!\nError: {}", e);
+            ZOO_VISION_ERROR
+        }
+    }
+}

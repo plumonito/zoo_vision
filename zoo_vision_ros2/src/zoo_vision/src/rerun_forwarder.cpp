@@ -22,9 +22,11 @@ using namespace std::chrono_literals;
 #include "opencv2/core/mat.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include <format>
+using CImage12m = zoo_msgs::msg::Image12m;
 extern "C" {
 extern uint32_t zoo_rs_init(void **zoo_rs_handle);
 extern uint32_t zoo_rs_test_me(void *zoo_rs_handle, char const *const frame_id);
+extern uint32_t zoo_rs_image_callback(void *zoo_rs_handle, const CImage12m *);
 }
 namespace {
 const std::string DEFAULT_VIDEO_URL = "data/sample_video.mp4";
@@ -55,7 +57,8 @@ void RerunForwarder::onImage(const zoo_msgs::msg::Image12m &msg) {
   //             msg.header.frame_id.c_str());
   auto frame_id = reinterpret_cast<const char *>(&msg.header.frame_id.data);
   RCLCPP_INFO(get_logger(), "Received img (id=%s)", frame_id);
-  zoo_rs_test_me(rsHandle_, frame_id);
+  // zoo_rs_test_me(rsHandle_, frame_id);
+  zoo_rs_image_callback(rsHandle_, &msg);
 }
 
 } // namespace zoo
