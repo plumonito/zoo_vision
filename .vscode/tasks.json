@@ -15,7 +15,7 @@
         {
             "type": "shell",
             "label": "Colcon: build",
-            "command": "colcon build --symlink-install",
+            "command": "colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo --cargo-args \" --release\"",
             "group": "build",
             "problemMatcher": [],
             "options": {

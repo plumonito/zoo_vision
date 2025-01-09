@@ -15,6 +15,7 @@
   <depend>image_transport</depend>
   <depend>sensor_msgs</depend>
   <depend>zoo_msgs</depend>
+  <depend>zoo_vision_rs</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

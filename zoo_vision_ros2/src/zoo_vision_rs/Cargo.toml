@@ -4,9 +4,10 @@ version = "0.1.0"
 authors = ["Daniel Herrera C <daniel.herrera.castro@gmail.com>"]
 edition = "2021"
 
-[[bin]]
+[lib]
 name = "zoo_vision_rs"
 path = "src/zoo_vision_rs.rs"
+crate-type = ["staticlib"]
 
 [dependencies]
 anyhow = {version = "1", features = ["backtrace"]}
@@ -18,11 +19,15 @@ version = "0.4"
 [dependencies.rosidl_runtime_rs]
 version = "0.4"
 
-[dependencies.example_interfaces]
-version = "*"
-
 [dependencies.sensor_msgs]
 version = "*"
 
 [dependencies.zoo_msgs]
 version = "*"
+
+[dependencies.libc]
+version = "*"
+
+[dependencies.rerun]
+version = "0.21.0"
+features = ["web_viewer"]

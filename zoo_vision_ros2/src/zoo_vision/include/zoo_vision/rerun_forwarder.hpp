@@ -15,7 +15,6 @@
 #include "rclcpp/rclcpp.hpp"
 #include "zoo_msgs/msg/image12m.hpp"
 #include <image_transport/image_transport.hpp>
-#include <rerun/recording_stream.hpp>
 
 namespace zoo {
 class RerunForwarder : public rclcpp::Node {
@@ -24,7 +23,7 @@ public:
 
   void onImage(const zoo_msgs::msg::Image12m &msg);
 
-  rerun::RecordingStream rerunStream_;
+  void *rsHandle_;
   std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>> imageSubscriber_;
 };
 } // namespace zoo

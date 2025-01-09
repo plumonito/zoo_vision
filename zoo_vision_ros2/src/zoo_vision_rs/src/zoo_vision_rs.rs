@@ -1,49 +1,47 @@
-use std::env;
+mod rerun_forwarder;
+use libc::c_char;
+use rerun_forwarder::RerunForwarder;
+use std::ffi::CStr;
 
-use anyhow::{Error, Result};
-use std::thread;
+const ZOO_VISION_OK: u32 = 0;
+const ZOO_VISION_ERROR: u32 = 1;
 
-const STACK_SIZE: usize = 10 * 15 * 1024 * 1024;
-
-fn run() -> Result<(), Error> {
-    // Usual main code goes here
-    let context = rclrs::Context::new(env::args())?;
-
-    let node = rclrs::create_node(&context, "rerun_forwarder_rs")?;
-
-    let mut num_messages: usize = 0;
-    println!("Listening from rust...");
-    // let _subscription = node.create_subscription::<zoo_msgs::msg::Image12m, _>(
-    //     "/input_camera/image",
-    //     rclrs::QOS_PROFILE_DEFAULT,
-    //     move |msg: rclrs::ReadOnlyLoanedMessage<'_, zoo_msgs::msg::Image12m>| {
-    //         num_messages += 1;
-    //         // let frame_id = String::from_utf8_lossy(msg.header.frame_id.data.as_slice());
-    //         // println!("I heard: '{}'", frame_id);
-    //         println!("(Got {} messages so far)", num_messages);
-    //     },
-    // )?;
-
-    let _subscription = node.create_subscription::<zoo_msgs::msg::rmw::Image12m, _>(
-        "/input_camera/image",
-        rclrs::QOS_PROFILE_SENSOR_DATA,
-        move |msg: rclrs::ReadOnlyLoanedMessage<'_, zoo_msgs::msg::rmw::Image12m>| {
-            num_messages += 1;
-            let frame_id = String::from_utf8_lossy(msg.header.frame_id.data.as_slice());
-            println!("I heard: '{}'", frame_id);
-            // println!("(Got {} messages so far)", num_messages);
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn zoo_rs_init(client: *mut *mut RerunForwarder) -> u32 {
+    let result = RerunForwarder::new();
+    match result {
+        Ok(c) => unsafe {
+            *client = Box::into_raw(Box::new(c));
+            ZOO_VISION_OK
         },
-    )?;
-    rclrs::spin(node).map_err(|err| err.into())
+        Err(e) => {
+            println!(
+                "zoo_vision_rs: Error creating RerunForwarder!\nError: {}",
+                e
+            );
+            ZOO_VISION_ERROR
+        }
+    }
 }
 
-fn main() -> Result<(), Error> {
-    // Spawn thread with explicit stack size
-    let child = thread::Builder::new()
-        .stack_size(STACK_SIZE)
-        .spawn(run)
-        .unwrap();
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn zoo_rs_test_me(p_client: *mut RerunForwarder, frame_id: *const c_char) -> u32 {
+    if p_client.is_null() {
+        return ZOO_VISION_ERROR;
+    }
 
-    // Wait for thread to join
-    return child.join().unwrap();
+    let client: &mut RerunForwarder = unsafe { &mut *p_client };
+
+    let frame_id = (unsafe { CStr::from_ptr(frame_id) }).to_str().unwrap();
+
+    let result = client.test_me(frame_id);
+    match result {
+        Ok(_) => ZOO_VISION_OK,
+        Err(e) => {
+            println!("zoo_vision_rs: Error logging!\nError: {}", e);
+            ZOO_VISION_ERROR
+        }
+    }
 }

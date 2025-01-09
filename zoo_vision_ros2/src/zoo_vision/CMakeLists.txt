@@ -13,6 +13,7 @@ find_package(rclcpp_components REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(zoo_msgs REQUIRED)
+# find_package(zoo_vision_rs REQUIRED)
 
 find_package( OpenCV 4.6.0 EXACT REQUIRED )
 
@@ -26,12 +27,10 @@ FetchContent_MakeAvailable(rerun_sdk)
 add_executable(zoo_vision 
   # Headers
   include/zoo_vision/zoo_camera.hpp
-  include/zoo_vision/rerun_forwarder.hpp
   include/zoo_vision/utils.hpp
   # Sources
   src/utils.cpp
   src/zoo_camera.cpp
-  src/rerun_forwarder.cpp
   src/main.cpp)
 
 target_include_directories(zoo_vision PUBLIC include)
@@ -41,11 +40,10 @@ ament_target_dependencies(zoo_vision
   rclcpp
   rclcpp_components
   image_transport
-  zoo_msgs
   cv_bridge
   OpenCV
+  zoo_msgs
 )
-target_link_libraries(${PROJECT_NAME} rerun_sdk)
 ####################################
 
 ####################################
@@ -68,7 +66,8 @@ ament_target_dependencies(zoo_vision2
   cv_bridge
   OpenCV
 )
-target_link_libraries(zoo_vision2 rerun_sdk)
+# target_link_libraries(zoo_vision2 rerun_sdk)
+target_link_libraries(zoo_vision2 /home/dherrera/git/zoo_vision/zoo_vision_ros2/build/zoo_vision_rs/release/libzoo_vision_rs.a)
 ####################################
 
 if(BUILD_TESTING)
