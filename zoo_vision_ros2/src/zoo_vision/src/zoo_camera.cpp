@@ -23,6 +23,8 @@ using namespace std::chrono_literals;
 #include "opencv2/imgcodecs.hpp"
 #include "zoo_vision/utils.hpp"
 
+#include <string.h>
+
 namespace {
 const std::string DEFAULT_VIDEO_NAME = "sample_video.mp4";
 }
@@ -40,26 +42,43 @@ ZooCamera::ZooCamera(const rclcpp::NodeOptions &options) : Node("input_camera", 
     RCLCPP_ERROR(get_logger(), "Failed to open video %s", videoUrl_.c_str());
     frameWidth_ = frameHeight_ = 500;
   }
+  assert(frameHeight_ * frameWidth_ * 3 <= zoo_msgs::msg::Image12m::DATA_MAX_SIZE);
   frameIndex_ = 0;
 
-  rmw_qos_profile_t qos = {RMW_QOS_POLICY_HISTORY_SYSTEM_DEFAULT,
-                           10,
-                           RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT,
-                           RMW_QOS_POLICY_DURABILITY_SYSTEM_DEFAULT,
-                           RMW_DURATION_UNSPECIFIED,
-                           RMW_DURATION_UNSPECIFIED,
-                           RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT,
-                           RMW_DURATION_UNSPECIFIED,
-                           false};
-  publisher_ = image_transport::create_publisher(this, "input_camera/image", qos);
+  // rmw_qos_profile_t qos = {RMW_QOS_POLICY_HISTORY_SYSTEM_DEFAULT,
+  //                          10,
+  //                          RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT,
+  //                          RMW_QOS_POLICY_DURABILITY_SYSTEM_DEFAULT,
+  //                          RMW_DURATION_UNSPECIFIED,
+  //                          RMW_DURATION_UNSPECIFIED,
+  //                          RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT,
+  //                          RMW_DURATION_UNSPECIFIED,
+  //                          false};
+  // publisher_ = image_transport::create_publisher(this, "input_camera/image", qos);
+  publisher_ = rclcpp::create_publisher<zoo_msgs::msg::Image12m>(*this, "input_camera/image", 10);
   timer_ = create_wall_timer(30ms, [this]() { this->onTimer(); });
 }
 
-void ZooCamera::onTimer() {
-  std_msgs::msg::Header header;
-  header.stamp = now();
+void setStr(zoo_msgs::msg::String &dest, const char *const src) {
+  size_t len = strlen(src);
+  if (len > zoo_msgs::msg::String::MAX_SIZE - 1) {
+    len = zoo_msgs::msg::String::MAX_SIZE - 1;
+  }
 
-  cv::Mat3b image(frameHeight_, frameWidth_);
+  strncpy(reinterpret_cast<char *>(&dest.data), src, len);
+  dest.data[len] = 0;
+  dest.size = len;
+}
+void ZooCamera::onTimer() {
+  auto msg = std::make_unique<zoo_msgs::msg::Image12m>();
+  msg->header.stamp = now();
+  setStr(msg->encoding, "bgr8");
+  msg->width = frameWidth_;
+  msg->height = frameHeight_;
+  msg->is_bigendian = false;
+  msg->step = msg->width;
+
+  cv::Mat3b image(frameHeight_, frameWidth_, reinterpret_cast<cv::Vec3b *>(&msg->data));
 
   if (cvStream_.isOpened()) {
     // RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 500, "Ptr before %ld", reinterpret_cast<intptr_t>(image.data));
@@ -71,17 +90,16 @@ void ZooCamera::onTimer() {
       frameIndex_ = 0;
       cvStream_ >> image;
     }
-    header.frame_id = std::to_string(frameIndex_);
+    setStr(msg->header.frame_id, std::to_string(frameIndex_).c_str());
 
     frameIndex_++;
   }
   if (image.empty()) {
-    header.frame_id = "error";
+    setStr(msg->header.frame_id, "error");
     image.setTo(cv::Vec3b(0, 0, 255));
   }
 
-  sensor_msgs::msg::Image::SharedPtr msg = cv_bridge::CvImage(header, "bgr8", image).toImageMsg();
-  publisher_.publish(msg);
+  publisher_->publish(std::move(msg));
 }
 
 } // namespace zoo

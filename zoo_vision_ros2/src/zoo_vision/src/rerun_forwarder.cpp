@@ -48,24 +48,30 @@ RerunForwarder::RerunForwarder(const rclcpp::NodeOptions &options)
     RCLCPP_INFO(get_logger(), "Failed to connect to rerun viewer. Error=%s", ok.description.c_str());
   }
 
-  imageSubscriber_ =
-      image_transport::create_subscription(this, "input_camera/image", [this](auto msg) { this->onImage(msg); }, "raw");
-  RCLCPP_INFO(get_logger(), "Publisher count: %ld", imageSubscriber_.getNumPublishers());
+  // imageSubscriber_ =
+  //     image_transport::create_subscription(this, "input_camera/image", [this](auto msg) { this->onImage(msg); },
+  //     "raw");
+  imageSubscriber_ = rclcpp::create_subscription<zoo_msgs::msg::Image12m>(
+      *this, "input_camera/image", 10, [this](const zoo_msgs::msg::Image12m &msg) { this->onImage(msg); });
+  RCLCPP_INFO(get_logger(), "Can loan messages: %d", imageSubscriber_->can_loan_messages());
+  // RCLCPP_INFO(get_logger(), "Publisher count: %ld", imageSubscriber_.getNumPublishers());
 }
 
-void RerunForwarder::onImage(const sensor_msgs::msg::Image::ConstSharedPtr &msgPtr) {
-  const auto &msg = *msgPtr;
-  auto time = timeFromRosTime(msg.header.stamp);
+void RerunForwarder::onImage(const zoo_msgs::msg::Image12m &msg) {
+  // auto time = timeFromRosTime(msg.header.stamp);
   // RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Received img (time=%s)",
   //                      std::format("{:%Y-%m-%d %H:%M:%S}", time).c_str());
-  RCLCPP_INFO(get_logger(), "Received img (time=%s, id=%s)", std::format("{:%Y-%m-%d %H:%M:%S}", time).c_str(),
-              msg.header.frame_id.c_str());
+  // RCLCPP_INFO(get_logger(), "Received img (time=%s, id=%s)", std::format("{:%Y-%m-%d %H:%M:%S}", time).c_str(),
+  //             msg.header.frame_id.c_str());
+  // std::string_view frame_id(reinterpret_cast<const char *>(&msg.header.frame_id.data), msg.header.frame_id.size);
+  auto frame_id = reinterpret_cast<const char *>(&msg.header.frame_id.data);
+  RCLCPP_INFO(get_logger(), "Received img (id=%s)", frame_id);
 
-  rerunStream_.set_time("camera", time);
-  rerun::Image rerunImage(msg.data, {msg.width, msg.height}, rerun::datatypes::ColorModel::BGR,
-                          rerun::datatypes::ChannelDatatype::U8);
+  // rerunStream_.set_time("camera", time);
+  // rerun::Image rerunImage(msg.data, {msg.width, msg.height}, rerun::datatypes::ColorModel::BGR,
+  // rerun::datatypes::ChannelDatatype::U8);
   ;
-  rerunStream_.log("camera", rerunImage);
+  // rerunStream_.log("camera", rerunImage);
 }
 
 } // namespace zoo

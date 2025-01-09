@@ -7,9 +7,9 @@
         {
             "name": "(gdb) Launch zoo_camera",
             "type": "cppdbg",
-            "preLaunchTask": "CMake: build",
+            // "preLaunchTask": "CMake: build",
             "request": "launch",
-            "program": "${workspaceFolder}/build/zoo_vision",
+            "program": "${workspaceFolder}/zoo_vision_ros2/build/zoo_vision/zoo_vision2",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

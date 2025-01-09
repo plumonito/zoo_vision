@@ -10,10 +10,12 @@
   <license>GPL-3.0-only</license>
 
   <build_depend>sensor_msgs</build_depend>
+  <build_depend>zoo_msgs</build_depend>
   <build_depend>rclrs</build_depend>
   <build_depend>rosidl_runtime_rs</build_depend>
 
   <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>zoo_msgs</exec_depend>
   <exec_depend>rclrs</exec_depend>
   <exec_depend>rosidl_runtime_rs</exec_depend>
 

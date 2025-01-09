@@ -12,6 +12,7 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(zoo_msgs REQUIRED)
 
 find_package( OpenCV 4.6.0 EXACT REQUIRED )
 
@@ -22,10 +23,10 @@ FetchContent_MakeAvailable(rerun_sdk)
 
 ####################################
 # zoo_vision package
-add_executable(${PROJECT_NAME} 
+add_executable(zoo_vision 
   # Headers
-  include/${PROJECT_NAME}/zoo_camera.hpp
-  include/${PROJECT_NAME}/rerun_forwarder.hpp
+  include/zoo_vision/zoo_camera.hpp
+  include/zoo_vision/rerun_forwarder.hpp
   include/zoo_vision/utils.hpp
   # Sources
   src/utils.cpp
@@ -33,13 +34,14 @@ add_executable(${PROJECT_NAME}
   src/rerun_forwarder.cpp
   src/main.cpp)
 
-target_include_directories(${PROJECT_NAME} PUBLIC include)
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+target_include_directories(zoo_vision PUBLIC include)
+target_compile_features(zoo_vision PUBLIC cxx_std_20)
 
-ament_target_dependencies(${PROJECT_NAME}
+ament_target_dependencies(zoo_vision
   rclcpp
   rclcpp_components
   image_transport
+  zoo_msgs
   cv_bridge
   OpenCV
 )
@@ -62,6 +64,7 @@ ament_target_dependencies(zoo_vision2
   rclcpp
   rclcpp_components
   image_transport
+  zoo_msgs
   cv_bridge
   OpenCV
 )

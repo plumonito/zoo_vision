@@ -23,3 +23,6 @@ version = "*"
 
 [dependencies.sensor_msgs]
 version = "*"
+
+[dependencies.zoo_msgs]
+version = "*"

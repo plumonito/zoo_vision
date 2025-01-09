@@ -13,9 +13,12 @@
 // zoo_vision. If not, see <https://www.gnu.org/licenses/>.
 
 #include "rclcpp/rclcpp.hpp"
+#include "zoo_msgs/msg/image12m.hpp"
 #include <image_transport/camera_publisher.hpp>
 #include <image_transport/image_transport.hpp>
 #include <opencv2/highgui/highgui.hpp>
+
+#include <memory>
 
 namespace zoo {
 class ZooCamera : public rclcpp::Node {
@@ -25,11 +28,12 @@ public:
 
   std::string videoUrl_;
   cv::VideoCapture cvStream_;
-  int frameWidth_;
-  int frameHeight_;
+  uint32_t frameWidth_;
+  uint32_t frameHeight_;
   size_t frameIndex_;
 
-  image_transport::Publisher publisher_;
+  // image_transport::Publisher publisher_;
+  std::shared_ptr<rclcpp::Publisher<zoo_msgs::msg::Image12m>> publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
 } // namespace zoo

@@ -2,6 +2,9 @@
 	"folders": [
 		{
 			"path": ".."
+		},
+		{
+			"path": "../../ros2_rust_ws"
 		}
 	],
 	"settings": {

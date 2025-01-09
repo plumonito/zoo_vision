@@ -13,6 +13,7 @@
 // zoo_vision. If not, see <https://www.gnu.org/licenses/>.
 
 #include "rclcpp/rclcpp.hpp"
+#include "zoo_msgs/msg/image12m.hpp"
 #include <image_transport/image_transport.hpp>
 #include <rerun/recording_stream.hpp>
 
@@ -21,9 +22,9 @@ class RerunForwarder : public rclcpp::Node {
 public:
   explicit RerunForwarder(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
 
-  void onImage(const sensor_msgs::msg::Image::ConstSharedPtr &);
+  void onImage(const zoo_msgs::msg::Image12m &msg);
 
   rerun::RecordingStream rerunStream_;
-  image_transport::Subscriber imageSubscriber_;
+  std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>> imageSubscriber_;
 };
 } // namespace zoo
