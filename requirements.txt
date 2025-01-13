@@ -1,0 +1,18 @@
+# For use in a venv
+# see make_env.sh
+# python==3.11
+catkin_pkg
+colcon-cargo
+colcon-ros-cargo
+scipy
+pandas
+matplotlib
+ipykernel
+ipython
+enlighten
+statsmodels
+rerun-sdk==0.21.0
+tensorflow[with-cuda]==2.18
+tensorboard_plugin_profile
+tf2onnx==1.16.1
+onnxruntime-gpu==1.20.1

@@ -45,16 +45,6 @@ ZooCamera::ZooCamera(const rclcpp::NodeOptions &options) : Node("input_camera", 
   assert(frameHeight_ * frameWidth_ * 3 <= zoo_msgs::msg::Image12m::DATA_MAX_SIZE);
   frameIndex_ = 0;
 
-  // rmw_qos_profile_t qos = {RMW_QOS_POLICY_HISTORY_SYSTEM_DEFAULT,
-  //                          10,
-  //                          RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT,
-  //                          RMW_QOS_POLICY_DURABILITY_SYSTEM_DEFAULT,
-  //                          RMW_DURATION_UNSPECIFIED,
-  //                          RMW_DURATION_UNSPECIFIED,
-  //                          RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT,
-  //                          RMW_DURATION_UNSPECIFIED,
-  //                          false};
-  // publisher_ = image_transport::create_publisher(this, "input_camera/image", qos);
   publisher_ = rclcpp::create_publisher<zoo_msgs::msg::Image12m>(*this, "input_camera/image", 10);
   timer_ = create_wall_timer(30ms, [this]() { this->onTimer(); });
 }
@@ -65,7 +55,7 @@ void setStr(zoo_msgs::msg::String &dest, const char *const src) {
     len = zoo_msgs::msg::String::MAX_SIZE - 1;
   }
 
-  strncpy(reinterpret_cast<char *>(&dest.data), src, len);
+  strcpy(reinterpret_cast<char *>(&dest.data), src);
   dest.data[len] = 0;
   dest.size = len;
 }
@@ -76,7 +66,7 @@ void ZooCamera::onTimer() {
   msg->width = frameWidth_;
   msg->height = frameHeight_;
   msg->is_bigendian = false;
-  msg->step = msg->width;
+  msg->step = msg->width * 3;
 
   cv::Mat3b image(frameHeight_, frameWidth_, reinterpret_cast<cv::Vec3b *>(&msg->data));
 

@@ -13,20 +13,21 @@
 // zoo_vision. If not, see <https://www.gnu.org/licenses/>.
 
 #include "rclcpp/rclcpp.hpp"
-#include "zoo_vision/segmenter.hpp"
-#include "zoo_vision/zoo_camera.hpp"
-#include <memory>
+#include "zoo_msgs/msg/image12m.hpp"
+#include <onnxruntime_cxx_api.h>
 
-int main(int argc, char *argv[]) {
-  rclcpp::init(argc, argv);
-  rclcpp::executors::SingleThreadedExecutor exec;
-  rclcpp::NodeOptions options;
-  auto camera_node = std::make_shared<zoo::ZooCamera>(options);
-  auto segmenter = std::make_shared<zoo::Segmenter>(options);
+namespace zoo {
+class Segmenter : public rclcpp::Node {
+public:
+  explicit Segmenter(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
 
-  exec.add_node(camera_node);
-  exec.add_node(segmenter);
-  exec.spin();
-  rclcpp::shutdown();
-  return 0;
-}
+  void loadModel();
+  void onImage(const zoo_msgs::msg::Image12m &msg);
+
+private:
+  Ort::Env ortEnv_;
+  Ort::Session ortSession_;
+
+  std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>> imageSubscriber_;
+};
+} // namespace zoo

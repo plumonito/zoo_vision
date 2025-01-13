@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 project(zoo_vision)
 
+include(FetchContent)
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -17,20 +19,28 @@ find_package(zoo_msgs REQUIRED)
 
 find_package( OpenCV 4.6.0 EXACT REQUIRED )
 
-# Rerun SDK
-include(FetchContent)
+# Download all deps
+FetchContent_Declare(onnxruntime_release URL https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-linux-x64-1.20.1.tgz)
 FetchContent_Declare(rerun_sdk URL https://github.com/rerun-io/rerun/releases/download/0.21.0/rerun_cpp_sdk.zip)
-FetchContent_MakeAvailable(rerun_sdk)
+FetchContent_MakeAvailable(rerun_sdk onnxruntime_release)
+
+# onnxruntime
+add_library(onnxruntime SHARED IMPORTED)
+target_include_directories(onnxruntime INTERFACE ${onnxruntime_release_SOURCE_DIR}/include)
+set_target_properties(onnxruntime PROPERTIES 
+  IMPORTED_LOCATION ${onnxruntime_release_SOURCE_DIR}/lib/libonnxruntime.so)
 
 ####################################
 # zoo_vision package
 add_executable(zoo_vision 
   # Headers
-  include/zoo_vision/zoo_camera.hpp
   include/zoo_vision/utils.hpp
+  include/zoo_vision/zoo_camera.hpp
+  include/zoo_vision/segmenter.hpp
   # Sources
   src/utils.cpp
   src/zoo_camera.cpp
+  src/segmenter.cpp
   src/main.cpp)
 
 target_include_directories(zoo_vision PUBLIC include)
@@ -44,6 +54,7 @@ ament_target_dependencies(zoo_vision
   OpenCV
   zoo_msgs
 )
+target_link_libraries(zoo_vision onnxruntime)
 ####################################
 
 ####################################

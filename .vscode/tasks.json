@@ -1,21 +1,32 @@
 {
     "version": "2.0.0",
     "tasks": [
-        // {
-        //     "type": "cmake",
-        //     "label": "CMake: build",
-        //     "command": "build",
-        //     "targets": [
-        //         "all"
-        //     ],
-        //     "group": "build",
-        //     "problemMatcher": [],
-        //     "detail": "CMake template build task"
-        // },
+        {
+            "type": "cmake",
+            "label": "CMake: build",
+            "command": "build",
+            "targets": [
+                "all"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "CMake template build task"
+        },
         {
             "type": "shell",
-            "label": "Colcon: build",
-            "command": "colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo --cargo-args \" --release\"",
+            "label": "Colcon: build release",
+            "command": "colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo --cargo-args '--release'",
+            "group": "build",
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}/zoo_vision_ros2"
+            },
+            "detail": "Colcon build all packages task"
+        },
+        {
+            "type": "shell",
+            "label": "Colcon: build debug",
+            "command": "colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Debug",
             "group": "build",
             "problemMatcher": [],
             "options": {
