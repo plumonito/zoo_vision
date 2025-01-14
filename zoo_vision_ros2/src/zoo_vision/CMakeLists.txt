@@ -19,16 +19,24 @@ find_package(zoo_msgs REQUIRED)
 
 find_package( OpenCV 4.6.0 EXACT REQUIRED )
 
+find_package (Eigen3 3.3 REQUIRED NO_MODULE)
+
 # Download all deps
 FetchContent_Declare(onnxruntime_release URL https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-linux-x64-1.20.1.tgz)
-FetchContent_Declare(rerun_sdk URL https://github.com/rerun-io/rerun/releases/download/0.21.0/rerun_cpp_sdk.zip)
-FetchContent_MakeAvailable(rerun_sdk onnxruntime_release)
+#FetchContent_Declare(rerun_sdk URL https://github.com/rerun-io/rerun/releases/download/0.21.0/rerun_cpp_sdk.zip)
+FetchContent_MakeAvailable(onnxruntime_release)
 
 # onnxruntime
 add_library(onnxruntime SHARED IMPORTED)
 target_include_directories(onnxruntime INTERFACE ${onnxruntime_release_SOURCE_DIR}/include)
 set_target_properties(onnxruntime PROPERTIES 
   IMPORTED_LOCATION ${onnxruntime_release_SOURCE_DIR}/lib/libonnxruntime.so)
+
+# zoo_vision_rs
+add_library(zoo_vision_rs STATIC IMPORTED)
+set_target_properties(zoo_vision_rs PROPERTIES 
+  IMPORTED_LOCATION  /home/dherrera/git/zoo_vision/zoo_vision_ros2/build/zoo_vision_rs/debug/libzoo_vision_rs.a
+  IMPORTED_LOCATION_RELEASE  /home/dherrera/git/zoo_vision/zoo_vision_ros2/build/zoo_vision_rs/release/libzoo_vision_rs.a)
 
 ####################################
 # zoo_vision package
@@ -54,22 +62,22 @@ ament_target_dependencies(zoo_vision
   OpenCV
   zoo_msgs
 )
-target_link_libraries(zoo_vision onnxruntime)
+target_link_libraries(zoo_vision Eigen3::Eigen onnxruntime)
 ####################################
 
 ####################################
 # zoo-vision2 package
-add_executable(zoo_vision2
+add_executable(zoo_rerun
   # Headers
-  include/${PROJECT_NAME}/rerun_forwarder.hpp
+  include/zoo_vision/rerun_forwarder.hpp
   # Sources
   src/rerun_forwarder.cpp
   src/main2.cpp)
 
-target_include_directories(zoo_vision2 PUBLIC include)
-target_compile_features(zoo_vision2 PUBLIC cxx_std_20)
+target_include_directories(zoo_rerun PUBLIC include)
+target_compile_features(zoo_rerun PUBLIC cxx_std_20)
 
-ament_target_dependencies(zoo_vision2
+ament_target_dependencies(zoo_rerun
   rclcpp
   rclcpp_components
   image_transport
@@ -78,7 +86,7 @@ ament_target_dependencies(zoo_vision2
   OpenCV
 )
 # target_link_libraries(zoo_vision2 rerun_sdk)
-target_link_libraries(zoo_vision2 /home/dherrera/git/zoo_vision/zoo_vision_ros2/build/zoo_vision_rs/release/libzoo_vision_rs.a)
+target_link_libraries(zoo_rerun zoo_vision_rs)
 ####################################
 
 if(BUILD_TESTING)
@@ -95,7 +103,11 @@ endif()
 
 
 install(TARGETS
-  ${PROJECT_NAME}
-  DESTINATION lib/${PROJECT_NAME})
+  zoo_vision
+  DESTINATION lib/zoo_vision)
+
+install(TARGETS
+  zoo_rerun
+  DESTINATION lib/zoo_rerun)
 
   ament_package()

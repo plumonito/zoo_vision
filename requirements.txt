@@ -1,7 +1,6 @@
 # For use in a venv
 # see make_env.sh
 # python==3.11
-catkin_pkg
 colcon-cargo
 colcon-ros-cargo
 scipy

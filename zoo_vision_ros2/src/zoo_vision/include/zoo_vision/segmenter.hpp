@@ -12,11 +12,16 @@
 // You should have received a copy of the GNU General Public License along with
 // zoo_vision. If not, see <https://www.gnu.org/licenses/>.
 
-#include "rclcpp/rclcpp.hpp"
 #include "zoo_msgs/msg/image12m.hpp"
+
+#include <Eigen/Dense>
 #include <onnxruntime_cxx_api.h>
+#include <rclcpp/rclcpp.hpp>
 
 namespace zoo {
+
+using float32_t = float;
+
 class Segmenter : public rclcpp::Node {
 public:
   explicit Segmenter(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
@@ -27,6 +32,8 @@ public:
 private:
   Ort::Env ortEnv_;
   Ort::Session ortSession_;
+
+  Eigen::Matrix<float32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> anchors_;
 
   std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>> imageSubscriber_;
 };

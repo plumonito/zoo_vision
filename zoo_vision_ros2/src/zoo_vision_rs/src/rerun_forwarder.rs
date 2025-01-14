@@ -12,7 +12,7 @@ impl RerunForwarder {
             "0.0.0.0",
             Default::default(),
             Default::default(),
-            rerun::MemoryLimit::from_fraction_of_total(0.25),
+            rerun::MemoryLimit::from_bytes(1024 * 1024 * 1024),
             false,
         )?;
         Ok(Self { recording })

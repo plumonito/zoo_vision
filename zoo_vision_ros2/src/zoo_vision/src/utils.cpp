@@ -17,20 +17,25 @@
 namespace zoo {
 
 std::filesystem::path getDataPath() {
-  const int MAX_DEPTH = 5;
+  static std::filesystem::path dataPath = {};
+  if (dataPath.empty()) {
+    const int MAX_DEPTH = 5;
 
-  std::filesystem::path root = std::filesystem::path(".");
-  int depth = 0;
-  while (depth < MAX_DEPTH) {
-    std::filesystem::path dataPath = root / "data";
-    if (std::filesystem::is_directory(dataPath)) {
-      return dataPath;
+    std::filesystem::path root = std::filesystem::path(".");
+    int depth = 0;
+    while (depth < MAX_DEPTH) {
+      dataPath = root / "data";
+      if (std::filesystem::is_directory(dataPath)) {
+        return dataPath;
+      }
+
+      depth++;
+      root = root / "..";
     }
-
-    depth++;
-    root = root / "..";
+    throw std::runtime_error("Could not find data path");
+  } else {
+    return dataPath;
   }
-  throw std::runtime_error("Could not find data path");
 }
 
 } // namespace zoo
