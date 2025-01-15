@@ -16,60 +16,30 @@
 
 #include "zoo_vision/utils.hpp"
 
-#include <onnxruntime_cxx_api.h>
+#include <ATen/core/List.h>
 #include <opencv2/core.hpp>
+#include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 #include <rclcpp/time.hpp>
+#include <torch/torch.h>
 
 #include <chrono>
 #include <fstream>
 #include <string.h>
 
 using namespace std::chrono_literals;
+using namespace torch::indexing;
 
 namespace zoo {
 
-Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", options), ortSession_{nullptr} {
+Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", options) {
   // Load model
   const auto modelDir = getDataPath().parent_path() / "models/camera0/segmentation";
-  const std::string modelPath = modelDir / "saved_model.onnx";
-  Ort::SessionOptions sessionOpts;
+  const std::string modelPath = modelDir / "torch.pt";
 
-  // auto api = Ort::GetApi();
-  // OrtCUDAProviderOptionsV2 *cuda_options = nullptr;
-  // Ort::ThrowOnError(api.CreateCUDAProviderOptions(&cuda_options));
-
-  // std::vector<const char *> keys{"device_id",
-  //                                "gpu_mem_limit",
-  //                                "arena_extend_strategy",
-  //                                "cudnn_conv_algo_search",
-  //                                "do_copy_in_default_stream",
-  //                                "cudnn_conv_use_max_workspace",
-  //                                "cudnn_conv1d_pad_to_nc1d"};
-  // std::vector<const char *> values{"0", "2147483648", "kSameAsRequested", "DEFAULT", "1", "1", "1"};
-  // Ort::ThrowOnError(api.UpdateCUDAProviderOptions(cuda_options, keys.data(), values.data(), keys.size()));
-
-  // sessionOpts.AppendExecutionProvider_CUDA_V2(*cuda_options);
-
-  ortSession_ = Ort::Session{ortEnv_, modelPath.c_str(), sessionOpts};
-
-  // api.ReleaseCUDAProviderOptions(cuda_options);
+  model_ = torch::jit::load(modelPath, torch::kCUDA);
 
   // DEBUG print model info
-  Ort::AllocatorWithDefaultOptions allocator;
-  std::cout << "Segmenter model loaded from: " << modelPath << std::endl;
-  std::cout << "Inputs: ";
-  for (size_t i = 0; i < ortSession_.GetInputCount(); i++) {
-    std::string input_name = ortSession_.GetInputNameAllocated(i, allocator).get();
-    std::cout << input_name << ", ";
-  }
-  std::cout << std::endl;
-  std::cout << "Outputs: ";
-  for (size_t i = 0; i < ortSession_.GetOutputCount(); i++) {
-    std::string input_name = ortSession_.GetOutputNameAllocated(i, allocator).get();
-    std::cout << input_name << ", ";
-  }
-  std::cout << std::endl;
 
   // Load anchors
   const auto anchorsPath = modelDir / "anchors.bin";
@@ -86,61 +56,57 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", opt
   // Subscribe to receive images from camera
   imageSubscriber_ = rclcpp::create_subscription<zoo_msgs::msg::Image12m>(
       *this, "input_camera/image", 10, [this](const zoo_msgs::msg::Image12m &msg) { this->onImage(msg); });
+
+  // Publish detections
+  maskPublisher_ = rclcpp::create_publisher<zoo_msgs::msg::Image4m>(*this, "input_camera/detections/mask", 10);
 }
 
 void Segmenter::loadModel() {}
 
-void Segmenter::onImage(const zoo_msgs::msg::Image12m &msg) {
+void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
 
-  // DANGER: casting away const. Data may be modified by opencv if we're not careful
-  auto *dataPtr = reinterpret_cast<cv::Vec3b *>(const_cast<unsigned char *>(msg.data.data()));
-  const cv::Mat3b img(msg.height, msg.width, dataPtr, msg.step);
+  const cv::Mat3b img = wrapMat3bFromMsg(imageMsg);
 
-  cv::Mat3b imgFixSize;
-  cv::resize(img, imgFixSize, {1024, 1024});
+  cv::Mat3b imgFixSize = img.clone();
+  // cv::resize(img, imgFixSize, {1024, 1024});
 
   // TODO: accept input as uint8
   cv::Mat3f imgFixSizef;
   imgFixSize.convertTo(imgFixSizef, CV_32FC3, 1.0f / 255);
 
-  // Input tensors
-  auto memory_info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
-  std::array<int64_t, 4> imageTensorSizes{1, 1024, 1024, 3};
-  Ort::Value imageTensor =
-      Ort::Value::CreateTensor<float>(memory_info, reinterpret_cast<float *>(imgFixSizef.data), 1024 * 1024 * 3,
-                                      imageTensorSizes.data(), imageTensorSizes.size());
+  torch::Tensor imageTensor =
+      torch::from_blob(imgFixSizef.data, {imgFixSizef.rows, imgFixSizef.cols, imgFixSizef.channels()},
+                       torch::TensorOptions().dtype(torch::kFloat32));
 
-  std::array<int64_t, 2> imageMetaTensorSizes{1, 14};
-  std::array<float32_t, 14> imageMeta{0.0f, 1024.0f, 1024.0f, 3.0f,    1024.0f, 1024.0f, 3.0f,
-                                      0.0f, 0.0f,    1024.0f, 1024.0f, 1.0f,    0.0f,    0.0f};
-  Ort::Value imageMetaTensor = Ort::Value::CreateTensor<float>(
-      memory_info, imageMeta.data(), imageMeta.size(), imageMetaTensorSizes.data(), imageMetaTensorSizes.size());
+  imageTensor = imageTensor.permute({2, 0, 1}).to(torch::kCUDA);
+  c10::List<torch::Tensor> imageList({imageTensor});
 
-  std::array<int64_t, 3> anchorTensorSizes{1, anchors_.rows(), anchors_.cols()};
-  std::cout << std::endl;
-  Ort::Value anchorsTensor =
-      Ort::Value::CreateTensor<float>(memory_info, anchors_.data(), anchors_.rows() * anchors_.cols(),
-                                      anchorTensorSizes.data(), anchorTensorSizes.size());
+  // TorchScript models require a List[IValue] as input
+  torch::IValue result = model_.forward({imageList});
+  const auto detections = result.toTuple()->elements()[1].toList()[0].get().toGenericDict();
 
-  constexpr int INPUT_COUNT = 3;
-  std::array<const char *, INPUT_COUNT> inputNames = {"input_image", "input_image_meta", "input_anchors"};
-  std::array<Ort::Value, INPUT_COUNT> inputTensors = {std::move(imageTensor), std::move(imageMetaTensor),
-                                                      std::move(anchorsTensor)};
+  // const torch::Tensor boxes = detections.at("boxes").toTensor();
+  // const torch::Tensor scores = detections.at("scores").toTensor().to(torch::kCPU);
 
-  // Output tensors
-  std::array<int64_t, 3> mrcnnDetectionTensorSizes{1, 10, 6};
-  Eigen::Matrix<float32_t, 10, 6, Eigen::RowMajor> mrcnnDetection;
-  Ort::Value mrcnnDetectionTensor =
-      Ort::Value::CreateTensor<float>(memory_info, mrcnnDetection.data(), mrcnnDetection.rows() * mrcnnDetection.cols(),
-                                      mrcnnDetectionTensorSizes.data(), mrcnnDetectionTensorSizes.size());
-  constexpr int OUTPUT_COUNT = 1;
-  std::array<const char *, OUTPUT_COUNT> outputNames = {"mrcnn_detection"};
-  std::array<Ort::Value, OUTPUT_COUNT> outputTensors = {std::move(mrcnnDetectionTensor)};
+  const torch::Tensor masksGpu = detections.at("masks").toTensor();
+  assert(masksGpu.dim() == 4);
+  const int64_t maskCount = masksGpu.sizes()[0];
+  for (int i = 0; i < maskCount; ++i) {
+    const torch::Tensor maskGpu = masksGpu.index({i, 0});
+    const torch::Tensor maskb = maskGpu.mul(255).clamp(0, 255).to(torch::kU8).to(torch::kCPU);
 
-  // Run
-  Ort::RunOptions runOptions;
-  ortSession_.Run(runOptions, inputNames.data(), inputTensors.data(), inputTensors.size(), outputNames.data(),
-                  outputTensors.data(), outputTensors.size());
+    assert(maskb.stride(1) == 1);
+    const cv::Mat1b maskCv(maskb.sizes()[0], maskb.sizes()[1], maskb.data_ptr<uchar>(), maskb.stride(0) * sizeof(char));
+
+    // cv::imwrite("test.png", maskCv);
+
+    auto maskMsg = std::make_unique<zoo_msgs::msg::Image4m>();
+    maskMsg->header = imageMsg.header;
+    copyMat1bToMsg(maskCv, *maskMsg);
+
+    maskPublisher_->publish(std::move(maskMsg));
+    break;
+  }
 }
 
 } // namespace zoo

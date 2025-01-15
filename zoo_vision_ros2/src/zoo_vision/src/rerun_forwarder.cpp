@@ -23,10 +23,12 @@ using namespace std::chrono_literals;
 #include "opencv2/imgcodecs.hpp"
 #include <format>
 using CImage12m = zoo_msgs::msg::Image12m;
+using CImage4m = zoo_msgs::msg::Image4m;
 extern "C" {
 extern uint32_t zoo_rs_init(void **zoo_rs_handle);
 extern uint32_t zoo_rs_test_me(void *zoo_rs_handle, char const *const frame_id);
 extern uint32_t zoo_rs_image_callback(void *zoo_rs_handle, const CImage12m *);
+extern uint32_t zoo_rs_mask_callback(void *zoo_rs_handle, const CImage4m *);
 }
 namespace {
 const std::string DEFAULT_VIDEO_URL = "data/sample_video.mp4";
@@ -44,21 +46,25 @@ RerunForwarder::RerunForwarder(const rclcpp::NodeOptions &options)
 
   imageSubscriber_ = rclcpp::create_subscription<zoo_msgs::msg::Image12m>(
       *this, "input_camera/image", 10, [this](const zoo_msgs::msg::Image12m &msg) { this->onImage(msg); });
-  RCLCPP_INFO(get_logger(), "Can loan messages: %d", imageSubscriber_->can_loan_messages());
+  RCLCPP_INFO(get_logger(), "Image subscriber can loan messages: %d", imageSubscriber_->can_loan_messages());
+
+  maskSubscriber_ = rclcpp::create_subscription<zoo_msgs::msg::Image4m>(
+      *this, "input_camera/detections/mask", 10, [this](const zoo_msgs::msg::Image4m &msg) { this->onMask(msg); });
 
   zoo_rs_init(&rsHandle_);
 }
 
 void RerunForwarder::onImage(const zoo_msgs::msg::Image12m &msg) {
-  // auto time = timeFromRosTime(msg.header.stamp);
-  // RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Received img (time=%s)",
-  //                      std::format("{:%Y-%m-%d %H:%M:%S}", time).c_str());
-  // RCLCPP_INFO(get_logger(), "Received img (time=%s, id=%s)", std::format("{:%Y-%m-%d %H:%M:%S}", time).c_str(),
-  //             msg.header.frame_id.c_str());
   auto frame_id = reinterpret_cast<const char *>(&msg.header.frame_id.data);
-  RCLCPP_INFO(get_logger(), "Received img (id=%s)", frame_id);
-  // zoo_rs_test_me(rsHandle_, frame_id);
+  // RCLCPP_INFO(get_logger(), "Received img (id=%s)", frame_id);
   zoo_rs_image_callback(rsHandle_, &msg);
+}
+
+void RerunForwarder::onMask(const zoo_msgs::msg::Image4m &msg) {
+  auto frame_id = reinterpret_cast<const char *>(&msg.header.frame_id.data);
+  // RCLCPP_INFO(get_logger(), "Received img (id=%s)", frame_id);
+  // zoo_rs_test_me(rsHandle_, frame_id);
+  zoo_rs_mask_callback(rsHandle_, &msg);
 }
 
 } // namespace zoo

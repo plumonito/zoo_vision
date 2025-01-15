@@ -12,10 +12,26 @@
 // You should have received a copy of the GNU General Public License along with
 // zoo_vision. If not, see <https://www.gnu.org/licenses/>.
 
+#include "zoo_msgs/msg/image12m.hpp"
+#include "zoo_msgs/msg/image4m.hpp"
+#include "zoo_msgs/msg/string.hpp"
+
+#include <opencv2/core/mat.hpp>
+
 #include <filesystem>
 
 namespace zoo {
 
 std::filesystem::path getDataPath();
+
+void setMsgString(zoo_msgs::msg::String &dest, const char *const src);
+
+cv::Mat3b wrapMat3bFromMsg(zoo_msgs::msg::Image12m &);
+
+// DANGER: Message is const but the returned mat will cast away the const
+// Do not modify it!
+cv::Mat3b wrapMat3bFromMsg(const zoo_msgs::msg::Image12m &);
+
+void copyMat1bToMsg(const cv::Mat1b &, zoo_msgs::msg::Image4m &);
 
 } // namespace zoo

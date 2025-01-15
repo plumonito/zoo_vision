@@ -14,6 +14,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "zoo_msgs/msg/image12m.hpp"
+#include "zoo_msgs/msg/image4m.hpp"
 #include <image_transport/image_transport.hpp>
 
 namespace zoo {
@@ -22,8 +23,10 @@ public:
   explicit RerunForwarder(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
 
   void onImage(const zoo_msgs::msg::Image12m &msg);
+  void onMask(const zoo_msgs::msg::Image4m &msg);
 
   void *rsHandle_;
   std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>> imageSubscriber_;
+  std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image4m>> maskSubscriber_;
 };
 } // namespace zoo

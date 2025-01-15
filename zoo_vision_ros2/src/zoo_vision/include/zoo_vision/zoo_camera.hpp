@@ -32,7 +32,6 @@ public:
   uint32_t frameHeight_;
   size_t frameIndex_;
 
-  // image_transport::Publisher publisher_;
   std::shared_ptr<rclcpp::Publisher<zoo_msgs::msg::Image12m>> publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
 };

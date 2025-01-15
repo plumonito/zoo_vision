@@ -1,5 +1,5 @@
 use anyhow::{Error, Result};
-use rerun::{demo_util::grid, external::glam};
+use rerun::{demo_util::grid, external::glam, external::ndarray};
 // use zoo_msgs::msg::rmw::Image12m;
 
 pub struct RerunForwarder {
@@ -46,10 +46,28 @@ impl RerunForwarder {
         let rr_image =
             rerun::Image::from_color_model_and_tensor(rerun::ColorModel::BGR, data_view).unwrap();
 
-        self.recording.log("input_camera/image", &rr_image)?;
-        println!("Test from forwarder, frame_id={}", unsafe {
-            std::str::from_utf8_unchecked(msg.header.frame_id.data.as_slice())
-        });
+        self.recording.log("camera0/image", &rr_image)?;
+        // println!("Test from forwarder, image id={}", unsafe {
+        //     std::str::from_utf8_unchecked(msg.header.frame_id.data.as_slice())
+        // });
+        Ok(())
+    }
+
+    pub fn mask_callback(
+        &mut self,
+        msg: &zoo_msgs::msg::rmw::Image4m,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use rerun::external::ndarray::ArrayView;
+        let data_view = unsafe {
+            ArrayView::from_shape_ptr((msg.height as usize, msg.width as usize), msg.data.as_ptr())
+        };
+        let rr_image =
+            rerun::Image::from_color_model_and_tensor(rerun::ColorModel::L, data_view).unwrap();
+
+        self.recording.log("camera0/image/mask", &rr_image)?;
+        // println!("Test from forwarder, mask id={}", unsafe {
+        //     std::str::from_utf8_unchecked(msg.header.frame_id.data.as_slice())
+        // });
         Ok(())
     }
 }

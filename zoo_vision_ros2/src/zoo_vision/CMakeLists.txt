@@ -22,15 +22,16 @@ find_package( OpenCV 4.6.0 EXACT REQUIRED )
 find_package (Eigen3 3.3 REQUIRED NO_MODULE)
 
 # Download all deps
-FetchContent_Declare(onnxruntime_release URL https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-linux-x64-1.20.1.tgz)
-#FetchContent_Declare(rerun_sdk URL https://github.com/rerun-io/rerun/releases/download/0.21.0/rerun_cpp_sdk.zip)
-FetchContent_MakeAvailable(onnxruntime_release)
+FetchContent_Declare(TorchRelease URL https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip)
+FetchContent_MakeAvailable(TorchRelease)
 
-# onnxruntime
-add_library(onnxruntime SHARED IMPORTED)
-target_include_directories(onnxruntime INTERFACE ${onnxruntime_release_SOURCE_DIR}/include)
-set_target_properties(onnxruntime PROPERTIES 
-  IMPORTED_LOCATION ${onnxruntime_release_SOURCE_DIR}/lib/libonnxruntime.so)
+# torch
+set(CMAKE_CUDA_ARCHITECTURES native)
+list(APPEND CMAKE_PREFIX_PATH "${torchrelease_SOURCE_DIR}")
+find_package(Torch REQUIRED)
+
+list(APPEND CMAKE_PREFIX_PATH "/home/dherrera/git/vision/install")
+find_package(TorchVision REQUIRED)
 
 # zoo_vision_rs
 add_library(zoo_vision_rs STATIC IMPORTED)
@@ -49,7 +50,8 @@ add_executable(zoo_vision
   src/utils.cpp
   src/zoo_camera.cpp
   src/segmenter.cpp
-  src/main.cpp)
+  src/main.cpp
+)
 
 target_include_directories(zoo_vision PUBLIC include)
 target_compile_features(zoo_vision PUBLIC cxx_std_20)
@@ -62,7 +64,8 @@ ament_target_dependencies(zoo_vision
   OpenCV
   zoo_msgs
 )
-target_link_libraries(zoo_vision Eigen3::Eigen onnxruntime)
+target_link_libraries(zoo_vision Eigen3::Eigen torch  -Wl,--no-as-needed TorchVision::TorchVision -Wl,--as-needed)
+
 ####################################
 
 ####################################

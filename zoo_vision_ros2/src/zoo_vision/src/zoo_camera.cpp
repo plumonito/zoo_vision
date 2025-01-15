@@ -14,16 +14,16 @@
 
 #include "zoo_vision/zoo_camera.hpp"
 
-#include "rclcpp/time.hpp"
-#include <chrono>
-using namespace std::chrono_literals;
-
-#include "cv_bridge/cv_bridge.hpp"
-#include "opencv2/core/mat.hpp"
-#include "opencv2/imgcodecs.hpp"
 #include "zoo_vision/utils.hpp"
 
-#include <string.h>
+#include <opencv2/core/mat.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <rclcpp/time.hpp>
+#include <sensor_msgs/image_encodings.hpp>
+
+#include <chrono>
+
+using namespace std::chrono_literals;
 
 namespace {
 const std::string DEFAULT_VIDEO_NAME = "sample_video.mp4";
@@ -49,24 +49,14 @@ ZooCamera::ZooCamera(const rclcpp::NodeOptions &options) : Node("input_camera", 
   timer_ = create_wall_timer(30ms, [this]() { this->onTimer(); });
 }
 
-void setStr(zoo_msgs::msg::String &dest, const char *const src) {
-  size_t len = strlen(src);
-  if (len > zoo_msgs::msg::String::MAX_SIZE - 1) {
-    len = zoo_msgs::msg::String::MAX_SIZE - 1;
-  }
-
-  strcpy(reinterpret_cast<char *>(&dest.data), src);
-  dest.data[len] = 0;
-  dest.size = len;
-}
 void ZooCamera::onTimer() {
   auto msg = std::make_unique<zoo_msgs::msg::Image12m>();
   msg->header.stamp = now();
-  setStr(msg->encoding, "bgr8");
+  setMsgString(msg->encoding, sensor_msgs::image_encodings::RGB8);
   msg->width = frameWidth_;
   msg->height = frameHeight_;
   msg->is_bigendian = false;
-  msg->step = msg->width * 3;
+  msg->step = msg->width * 3 * sizeof(char);
 
   cv::Mat3b image(frameHeight_, frameWidth_, reinterpret_cast<cv::Vec3b *>(&msg->data));
 
@@ -80,12 +70,12 @@ void ZooCamera::onTimer() {
       frameIndex_ = 0;
       cvStream_ >> image;
     }
-    setStr(msg->header.frame_id, std::to_string(frameIndex_).c_str());
+    setMsgString(msg->header.frame_id, std::to_string(frameIndex_).c_str());
 
     frameIndex_++;
   }
   if (image.empty()) {
-    setStr(msg->header.frame_id, "error");
+    setMsgString(msg->header.frame_id, "error");
     image.setTo(cv::Vec3b(0, 0, 255));
   }
 

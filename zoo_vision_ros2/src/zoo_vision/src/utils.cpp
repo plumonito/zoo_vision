@@ -12,7 +12,12 @@
 // You should have received a copy of the GNU General Public License along with
 // zoo_vision. If not, see <https://www.gnu.org/licenses/>.
 
+#include "zoo_vision/utils.hpp"
+
+#include <sensor_msgs/image_encodings.hpp>
+
 #include <filesystem>
+#include <string.h>
 
 namespace zoo {
 
@@ -36,6 +41,39 @@ std::filesystem::path getDataPath() {
   } else {
     return dataPath;
   }
+}
+
+void setMsgString(zoo_msgs::msg::String &dest, const char *const src) {
+  size_t len = strlen(src);
+  if (len > zoo_msgs::msg::String::MAX_SIZE - 1) {
+    len = zoo_msgs::msg::String::MAX_SIZE - 1;
+  }
+
+  strcpy(reinterpret_cast<char *>(&dest.data), src);
+  dest.data[len] = 0;
+  dest.size = len;
+}
+
+namespace detail {
+template <class TMsg> cv::Mat3b wrapMat3bFromMsg(TMsg &msg) {
+  // DANGER: casting away const. Data may be modified by opencv if we're not careful
+  auto *dataPtr = reinterpret_cast<cv::Vec3b *>(const_cast<unsigned char *>(msg.data.data()));
+  return cv::Mat3b(msg.height, msg.width, dataPtr, msg.step);
+}
+} // namespace detail
+
+cv::Mat3b wrapMat3bFromMsg(zoo_msgs::msg::Image12m &msg) { return detail::wrapMat3bFromMsg(msg); }
+cv::Mat3b wrapMat3bFromMsg(const zoo_msgs::msg::Image12m &msg) { return detail::wrapMat3bFromMsg(msg); }
+
+void copyMat1bToMsg(const cv::Mat1b &img, zoo_msgs::msg::Image4m &msg) {
+  setMsgString(msg.encoding, sensor_msgs::image_encodings::MONO8);
+  msg.width = img.cols;
+  msg.height = img.rows;
+  msg.is_bigendian = false;
+  msg.step = img.step;
+  size_t byteCount = msg.step * msg.height;
+  assert(byteCount <= zoo_msgs::msg::Image4m::DATA_MAX_SIZE);
+  memcpy(msg.data.data(), img.data, byteCount);
 }
 
 } // namespace zoo

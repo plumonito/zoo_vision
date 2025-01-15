@@ -13,10 +13,11 @@
 // zoo_vision. If not, see <https://www.gnu.org/licenses/>.
 
 #include "zoo_msgs/msg/image12m.hpp"
+#include "zoo_msgs/msg/image4m.hpp"
 
 #include <Eigen/Dense>
-#include <onnxruntime_cxx_api.h>
 #include <rclcpp/rclcpp.hpp>
+#include <torch/script.h>
 
 namespace zoo {
 
@@ -30,11 +31,11 @@ public:
   void onImage(const zoo_msgs::msg::Image12m &msg);
 
 private:
-  Ort::Env ortEnv_;
-  Ort::Session ortSession_;
+  torch::jit::script::Module model_;
 
   Eigen::Matrix<float32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> anchors_;
 
   std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>> imageSubscriber_;
+  std::shared_ptr<rclcpp::Publisher<zoo_msgs::msg::Image4m>> maskPublisher_;
 };
 } // namespace zoo
