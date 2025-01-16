@@ -14,25 +14,26 @@
 
 #include "zoo_vision/rerun_forwarder.hpp"
 
-#include "rclcpp/time.hpp"
+#include "zoo_vision/utils.hpp"
+
+#include <cv_bridge/cv_bridge.hpp>
+#include <opencv2/core/mat.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <rclcpp/time.hpp>
+
 #include <chrono>
+#include <format>
+
 using namespace std::chrono_literals;
 
-#include "cv_bridge/cv_bridge.hpp"
-#include "opencv2/core/mat.hpp"
-#include "opencv2/imgcodecs.hpp"
-#include <format>
 using CImage12m = zoo_msgs::msg::Image12m;
 using CImage4m = zoo_msgs::msg::Image4m;
 using CDetection = zoo_msgs::msg::Detection;
 extern "C" {
-extern uint32_t zoo_rs_init(void **zoo_rs_handle);
+extern uint32_t zoo_rs_init(void **zoo_rs_handle, char const *const data_path);
 extern uint32_t zoo_rs_test_me(void *zoo_rs_handle, char const *const frame_id);
 extern uint32_t zoo_rs_image_callback(void *zoo_rs_handle, char const *const channel, const CImage12m *);
 extern uint32_t zoo_rs_detection_callback(void *zoo_rs_handle, char const *const channel, const CDetection *);
-}
-namespace {
-const std::string DEFAULT_VIDEO_URL = "data/sample_video.mp4";
 }
 namespace zoo {
 
@@ -59,7 +60,7 @@ RerunForwarder::RerunForwarder(const rclcpp::NodeOptions &options)
   };
   subscribeDetection("input_camera/detections");
 
-  zoo_rs_init(&rsHandle_);
+  zoo_rs_init(&rsHandle_, getDataPath().c_str());
 }
 
 void RerunForwarder::onImage(const char *const channel, const zoo_msgs::msg::Image12m &msg) {

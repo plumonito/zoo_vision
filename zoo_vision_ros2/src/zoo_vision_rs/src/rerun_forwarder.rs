@@ -1,7 +1,10 @@
 use anyhow::{Error, Result};
 use ndarray::prelude::*;
-use rerun::{demo_util::grid, external::glam, external::ndarray};
-// use zoo_msgs::msg::rmw::Image12m;
+use rerun::{
+    demo_util::grid,
+    external::{glam, ndarray},
+};
+use std::path::Path;
 
 const MAX_DETECTION_COUNT: i32 = 5;
 
@@ -14,7 +17,7 @@ fn nanosec_from_ros(stamp: &builtin_interfaces::msg::rmw::Time) -> i64 {
 }
 
 impl RerunForwarder {
-    pub fn new() -> Result<Self, Error> {
+    pub fn new(data_path: &Path) -> Result<Self, Error> {
         let recording = rerun::RecordingStreamBuilder::new("zoo_vision").serve_web(
             "0.0.0.0",
             Default::default(),
@@ -22,6 +25,12 @@ impl RerunForwarder {
             rerun::MemoryLimit::from_bytes(1024 * 1024 * 1024),
             false,
         )?;
+
+        // Load floor plan
+        let world_image = image::ImageReader::open(data_path.join("floor_plan.png"))?.decode()?;
+        let world_image_rr = rerun::Image::from_dynamic_image(world_image)?;
+        recording.log_static("world/floor_plan", &world_image_rr)?;
+
         Ok(Self { recording })
     }
 
@@ -62,8 +71,13 @@ impl RerunForwarder {
         // Clear out detections
         self.recording.set_time_sequence("ros_time", time_ns - 1);
 
-        let channel = format!("{}/detections", "input_camera");
-        self.recording.log(channel, &rerun::Clear::recursive())?;
+        let camera_name = "input_camera";
+        let image_detections_ent = format!("{}/detections", camera_name);
+        self.recording
+            .log(image_detections_ent, &rerun::Clear::recursive())?;
+        let world_detections_ent = format!("world/{}/detections", camera_name);
+        self.recording
+            .log(world_detections_ent, &rerun::Clear::recursive())?;
         // println!("Test from forwarder, image id={}", unsafe {
         //     std::str::from_utf8_unchecked(msg.header.frame_id.data.as_slice())
         // });
@@ -88,23 +102,26 @@ impl RerunForwarder {
             )
         };
 
+        // Set rerun time
+        self.recording
+            .set_time_sequence("ros_time", nanosec_from_ros(&msg.mask.header.stamp));
+
+        // Log image
         // Create an rgba image
         let mut image_rgb = ndarray::Array::<u8, _>::zeros(
             (msg.mask.height as usize, msg.mask.width as usize, 3).f(),
         );
-
-        let color = id % 3;
-
-        data_view.assign_to(&mut image_rgb.index_axis_mut(Axis(2), color as usize));
+        let color_idx = (id % 3) as usize;
+        data_view.assign_to(&mut image_rgb.index_axis_mut(Axis(2), color_idx));
 
         let rr_image =
             rerun::Image::from_color_model_and_tensor(rerun::ColorModel::RGB, image_rgb).unwrap();
-        self.recording
-            .set_time_sequence("ros_time", nanosec_from_ros(&msg.mask.header.stamp));
         self.recording.log(
             format!("{}/{}/mask", channel, id),
             &rr_image.with_draw_order(id as f32).with_opacity(0.3),
         )?;
+
+        // Log bounding box
         self.recording.log(
             format!("{}/{}/box", channel, id),
             &rerun::Boxes2D::from_centers_and_half_sizes(
@@ -113,6 +130,16 @@ impl RerunForwarder {
             ),
         )?;
 
+        // Log position in world
+        let world_points_rr =
+            rerun::Points2D::new([(msg.world_position[0], msg.world_position[1])]);
+        let mut color = [0, 0, 0];
+        color[color_idx] = 255;
+        let color_rr = rerun::Color::from_unmultiplied_rgba(color[0], color[1], color[2], 76);
+        self.recording.log(
+            format!("world/input_camera/detections/{}", id),
+            &world_points_rr.with_colors([color_rr]).with_radii([20.0]),
+        )?;
         // // println!("Test from forwarder, mask id={}", unsafe {
         //     std::str::from_utf8_unchecked(msg.header.frame_id.data.as_slice())
         // });

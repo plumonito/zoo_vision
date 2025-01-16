@@ -2,14 +2,17 @@ mod rerun_forwarder;
 use libc::c_char;
 use rerun_forwarder::RerunForwarder;
 use std::ffi::CStr;
+use std::path::Path;
 
 const ZOO_VISION_OK: u32 = 0;
 const ZOO_VISION_ERROR: u32 = 1;
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
-pub extern "C" fn zoo_rs_init(client: *mut *mut RerunForwarder) -> u32 {
-    let result = RerunForwarder::new();
+pub extern "C" fn zoo_rs_init(client: *mut *mut RerunForwarder, data_path_c: *const c_char) -> u32 {
+    let data_path_s = (unsafe { CStr::from_ptr(data_path_c) }).to_str().unwrap();
+
+    let result = RerunForwarder::new(Path::new(data_path_s));
     match result {
         Ok(c) => unsafe {
             *client = Box::into_raw(Box::new(c));

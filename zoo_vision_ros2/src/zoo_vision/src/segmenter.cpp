@@ -134,22 +134,30 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
     assert(maskb.stride(1) == 1);
     const cv::Mat1b maskCv(maskb.sizes()[0], maskb.sizes()[1], maskb.data_ptr<uchar>(), maskb.stride(0) * sizeof(char));
 
+    const float32_t resizeFactor = static_cast<float32_t>(img.rows) / maskCv.rows;
+
     // cv::imwrite("test.png", maskCv);
     // Publish detection message
     auto detectionMsg = std::make_unique<zoo_msgs::msg::Detection>();
     detectionMsg->detection_id = i;
 
     // Bbox
-    {
-      const Eigen::Vector2f x0{bbox[0].item<float32_t>(), bbox[1].item<float32_t>()};
-      const Eigen::Vector2f x1{bbox[2].item<float32_t>(), bbox[3].item<float32_t>()};
-      const Eigen::Vector2f center = (x0 + x1) / 2;
-      const Eigen::Vector2f halfSize = x1 - center;
-      detectionMsg->bbox.center[0] = center[0];
-      detectionMsg->bbox.center[1] = center[1];
-      detectionMsg->bbox.half_size[0] = halfSize[0];
-      detectionMsg->bbox.half_size[1] = halfSize[1];
-    }
+    const Eigen::Vector2f x0{bbox[0].item<float32_t>(), bbox[1].item<float32_t>()};
+    const Eigen::Vector2f x1{bbox[2].item<float32_t>(), bbox[3].item<float32_t>()};
+    const Eigen::Vector2f center = (x0 + x1) / 2;
+    const Eigen::Vector2f halfSize = x1 - center;
+    detectionMsg->bbox.center[0] = center[0];
+    detectionMsg->bbox.center[1] = center[1];
+    detectionMsg->bbox.half_size[0] = halfSize[0];
+    detectionMsg->bbox.half_size[1] = halfSize[1];
+
+    // Project to world
+    const Eigen::Vector2f floorCenter = (center + Eigen::Vector2f{0, halfSize[1]}) * resizeFactor;
+
+    const Eigen::Vector3f worldCenter = (H_worldFromCamera_ * floorCenter.homogeneous()).hnormalized().homogeneous();
+    detectionMsg->world_position[0] = worldCenter[0];
+    detectionMsg->world_position[1] = worldCenter[1];
+    detectionMsg->world_position[2] = worldCenter[2];
 
     detectionMsg->mask.header = imageMsg.header;
     copyMat1bToMsg(maskCv, detectionMsg->mask);
