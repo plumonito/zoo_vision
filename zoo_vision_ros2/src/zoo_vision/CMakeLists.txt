@@ -23,7 +23,8 @@ find_package (Eigen3 3.3 REQUIRED NO_MODULE)
 
 # Download all deps
 FetchContent_Declare(TorchRelease URL https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip)
-FetchContent_MakeAvailable(TorchRelease)
+FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
+FetchContent_MakeAvailable(TorchRelease json)
 
 # torch
 set(CMAKE_CUDA_ARCHITECTURES native)
@@ -45,6 +46,7 @@ set_target_properties(zoo_vision_rs PROPERTIES
 add_executable(zoo_vision 
   # Headers
   include/zoo_vision/utils.hpp
+  include/zoo_vision/json_eigen.hpp
   include/zoo_vision/zoo_camera.hpp
   include/zoo_vision/segmenter.hpp
   include/zoo_vision/rerun_forwarder.hpp
@@ -67,8 +69,12 @@ ament_target_dependencies(zoo_vision
   OpenCV
   zoo_msgs
 )
-target_link_libraries(zoo_vision Eigen3::Eigen torch  -Wl,--no-as-needed TorchVision::TorchVision -Wl,--as-needed)
-target_link_libraries(zoo_vision zoo_vision_rs)
+target_link_libraries(zoo_vision 
+  Eigen3::Eigen torch
+  -Wl,--no-as-needed TorchVision::TorchVision -Wl,--as-needed 
+  nlohmann_json::nlohmann_json
+  zoo_vision_rs
+)
 
 install(TARGETS
   zoo_vision

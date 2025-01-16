@@ -32,9 +32,8 @@ public:
   void onImage(const zoo_msgs::msg::Image12m &msg);
 
 private:
+  Eigen::Matrix3f H_worldFromCamera_;
   torch::jit::script::Module model_;
-
-  Eigen::Matrix<float32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> anchors_;
 
   std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>> imageSubscriber_;
 

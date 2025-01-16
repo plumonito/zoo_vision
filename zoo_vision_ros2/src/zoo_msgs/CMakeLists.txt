@@ -25,13 +25,7 @@ set(msg_files
   "msg/Image4m.msg"
   "msg/Image8m.msg"
   "msg/Image12m.msg"
-  "msg/PointField.msg"
-  "msg/PointCloud8k.msg"
-  "msg/PointCloud512k.msg"
-  "msg/PointCloud1m.msg"
-  "msg/PointCloud2m.msg"
-  "msg/PointCloud4m.msg"
-  "msg/PointCloud8m.msg"
+  "msg/BoundingBox2D.msg"
   "msg/Detection.msg"
 )
 rosidl_generate_interfaces(${PROJECT_NAME}

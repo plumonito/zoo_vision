@@ -62,10 +62,8 @@ impl RerunForwarder {
         // Clear out detections
         self.recording.set_time_sequence("ros_time", time_ns - 1);
 
-        for detection_id in 0..MAX_DETECTION_COUNT {
-            let channel = format!("{}/{}", "input_camera/detections", detection_id);
-            self.recording.log(channel, &rerun::Clear::flat())?;
-        }
+        let channel = format!("{}/detections", "input_camera");
+        self.recording.log(channel, &rerun::Clear::recursive())?;
         // println!("Test from forwarder, image id={}", unsafe {
         //     std::str::from_utf8_unchecked(msg.header.frame_id.data.as_slice())
         // });
@@ -91,24 +89,31 @@ impl RerunForwarder {
         };
 
         // Create an rgba image
-        let mut image_rgba = ndarray::Array::<u8, _>::zeros(
-            (msg.mask.height as usize, msg.mask.width as usize, 4).f(),
+        let mut image_rgb = ndarray::Array::<u8, _>::zeros(
+            (msg.mask.height as usize, msg.mask.width as usize, 3).f(),
         );
 
         let color = id % 3;
 
-        image_rgba.slice_mut(s![.., .., color]).fill(255);
-        data_view.assign_to(&mut image_rgba.index_axis_mut(Axis(2), 3));
+        data_view.assign_to(&mut image_rgb.index_axis_mut(Axis(2), color as usize));
 
         let rr_image =
-            rerun::Image::from_color_model_and_tensor(rerun::ColorModel::RGBA, image_rgba).unwrap();
+            rerun::Image::from_color_model_and_tensor(rerun::ColorModel::RGB, image_rgb).unwrap();
         self.recording
             .set_time_sequence("ros_time", nanosec_from_ros(&msg.mask.header.stamp));
         self.recording.log(
-            format!("{}/{}", channel, id),
+            format!("{}/{}/mask", channel, id),
             &rr_image.with_draw_order(id as f32).with_opacity(0.3),
         )?;
-        // println!("Test from forwarder, mask id={}", unsafe {
+        self.recording.log(
+            format!("{}/{}/box", channel, id),
+            &rerun::Boxes2D::from_centers_and_half_sizes(
+                [(msg.bbox.center[0], msg.bbox.center[1])],
+                [(msg.bbox.half_size[0], msg.bbox.half_size[1])],
+            ),
+        )?;
+
+        // // println!("Test from forwarder, mask id={}", unsafe {
         //     std::str::from_utf8_unchecked(msg.header.frame_id.data.as_slice())
         // });
         Ok(())
