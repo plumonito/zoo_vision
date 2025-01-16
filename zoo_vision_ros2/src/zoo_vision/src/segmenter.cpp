@@ -24,6 +24,7 @@
 #include <sensor_msgs/image_encodings.hpp>
 #include <torch/torch.h>
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <string.h>
@@ -104,15 +105,27 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
 
   const auto detections = detectionResult.toTuple()->elements()[1].toList()[0].get().toGenericDict();
 
-  // const torch::Tensor boxes = detections.at("boxes").toTensor();
+  // Masks to u8
+  const torch::Tensor masksGpu = detections.at("masks").toTensor();
+  const torch::Tensor masksbGpu = masksGpu.mul(255).clamp(0, 255).to(torch::kU8);
+
+  // Move all to cpu
+  const torch::Tensor boxes = detections.at("boxes").toTensor().to(torch::kCPU);
+  const torch::Tensor masksb = masksbGpu.to(torch::kCPU);
   // const torch::Tensor scores = detections.at("scores").toTensor().to(torch::kCPU);
 
-  const torch::Tensor masksGpu = detections.at("masks").toTensor();
-  assert(masksGpu.dim() == 4);
-  const int64_t maskCount = masksGpu.sizes()[0];
-  for (int i = 0; i < maskCount; ++i) {
-    const torch::Tensor maskGpu = masksGpu.index({i, 0});
-    const torch::Tensor maskb = maskGpu.mul(255).clamp(0, 255).to(torch::kU8).to(torch::kCPU);
+  assert(boxes.dim() == 2);
+  assert(boxes.sizes()[0] == masksb.sizes()[0]);
+  assert(masksb.dim() == 4);
+  constexpr int64_t MAX_DETECTION_COUNT = 5;
+  const int64_t detectionCount = std::min(MAX_DETECTION_COUNT, masksGpu.sizes()[0]);
+
+  // Order the detections so they have roughly the same id over time
+  torch::Tensor sortedIndices = boxes.slice(0, 0, detectionCount).slice(1, 0, 1).argsort(0l);
+
+  for (int i = 0; i < detectionCount; ++i) {
+    auto j = sortedIndices[i].item<int64_t>();
+    const torch::Tensor maskb = masksb.index({j, 0});
 
     assert(maskb.stride(1) == 1);
     const cv::Mat1b maskCv(maskb.sizes()[0], maskb.sizes()[1], maskb.data_ptr<uchar>(), maskb.stride(0) * sizeof(char));

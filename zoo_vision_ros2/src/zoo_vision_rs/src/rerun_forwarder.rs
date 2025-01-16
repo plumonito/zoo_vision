@@ -3,6 +3,8 @@ use ndarray::prelude::*;
 use rerun::{demo_util::grid, external::glam, external::ndarray};
 // use zoo_msgs::msg::rmw::Image12m;
 
+const MAX_DETECTION_COUNT: i32 = 5;
+
 pub struct RerunForwarder {
     recording: rerun::RecordingStream,
 }
@@ -60,7 +62,7 @@ impl RerunForwarder {
         // Clear out detections
         self.recording.set_time_sequence("ros_time", time_ns - 1);
 
-        for detection_id in 0..20 {
+        for detection_id in 0..MAX_DETECTION_COUNT {
             let channel = format!("{}/{}", "input_camera/detections", detection_id);
             self.recording.log(channel, &rerun::Clear::flat())?;
         }
@@ -75,6 +77,11 @@ impl RerunForwarder {
         channel: &str,
         msg: &zoo_msgs::msg::rmw::Detection,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let id = msg.detection_id as i32;
+        if id >= MAX_DETECTION_COUNT {
+            return Ok(());
+        }
+
         // Map message data to image array
         let data_view: ArrayBase<ndarray::ViewRepr<&u8>, Ix2> = unsafe {
             ArrayView::from_shape_ptr(
@@ -83,17 +90,14 @@ impl RerunForwarder {
             )
         };
 
-        let id = msg.detection_id as i32;
-
         // Create an rgba image
         let mut image_rgba = ndarray::Array::<u8, _>::zeros(
             (msg.mask.height as usize, msg.mask.width as usize, 4).f(),
         );
-        if id > 2 {
-            return Ok(());
-        }
 
-        image_rgba.slice_mut(s![.., .., id]).fill(255);
+        let color = id % 3;
+
+        image_rgba.slice_mut(s![.., .., color]).fill(255);
         data_view.assign_to(&mut image_rgba.index_axis_mut(Axis(2), 3));
 
         let rr_image =
