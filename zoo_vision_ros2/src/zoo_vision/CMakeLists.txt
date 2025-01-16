@@ -47,10 +47,12 @@ add_executable(zoo_vision
   include/zoo_vision/utils.hpp
   include/zoo_vision/zoo_camera.hpp
   include/zoo_vision/segmenter.hpp
+  include/zoo_vision/rerun_forwarder.hpp
   # Sources
   src/utils.cpp
   src/zoo_camera.cpp
   src/segmenter.cpp
+  src/rerun_forwarder.cpp
   src/main.cpp
 )
 
@@ -66,31 +68,42 @@ ament_target_dependencies(zoo_vision
   zoo_msgs
 )
 target_link_libraries(zoo_vision Eigen3::Eigen torch  -Wl,--no-as-needed TorchVision::TorchVision -Wl,--as-needed)
+target_link_libraries(zoo_vision zoo_vision_rs)
+
+install(TARGETS
+  zoo_vision
+  DESTINATION lib/zoo_vision)
 
 ####################################
 
 ####################################
-# zoo-vision2 package
-add_executable(zoo_rerun
-  # Headers
-  include/zoo_vision/rerun_forwarder.hpp
-  # Sources
-  src/rerun_forwarder.cpp
-  src/main2.cpp)
+# zoo_rerun package
+# add_executable(zoo_rerun
+#   # Headers
+#   include/zoo_vision/rerun_forwarder.hpp
+#   # Sources
+#   src/rerun_forwarder.cpp
+#   src/main2.cpp)
 
-target_include_directories(zoo_rerun PUBLIC include)
-target_compile_features(zoo_rerun PUBLIC cxx_std_20)
+# target_include_directories(zoo_rerun PUBLIC include)
+# target_compile_features(zoo_rerun PUBLIC cxx_std_20)
 
-ament_target_dependencies(zoo_rerun
-  rclcpp
-  rclcpp_components
-  image_transport
-  zoo_msgs
-  cv_bridge
-  OpenCV
-)
-# target_link_libraries(zoo_vision2 rerun_sdk)
-target_link_libraries(zoo_rerun zoo_vision_rs)
+# ament_target_dependencies(zoo_rerun
+#   rclcpp
+#   rclcpp_components
+#   image_transport
+#   zoo_msgs
+#   cv_bridge
+#   OpenCV
+# )
+# # target_link_libraries(zoo_vision2 rerun_sdk)
+# target_link_libraries(zoo_rerun zoo_vision_rs)
+
+# install(TARGETS
+#   zoo_rerun
+#   DESTINATION lib/zoo_vision)
+
+
 ####################################
 
 if(BUILD_TESTING)
@@ -105,13 +118,4 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-
-install(TARGETS
-  zoo_vision
-  DESTINATION lib/zoo_vision)
-
-install(TARGETS
-  zoo_rerun
-  DESTINATION lib/zoo_rerun)
-
-  ament_package()
+ament_package()

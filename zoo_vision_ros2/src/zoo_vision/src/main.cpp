@@ -13,19 +13,22 @@
 // zoo_vision. If not, see <https://www.gnu.org/licenses/>.
 
 #include "rclcpp/rclcpp.hpp"
+#include "zoo_vision/rerun_forwarder.hpp"
 #include "zoo_vision/segmenter.hpp"
 #include "zoo_vision/zoo_camera.hpp"
 #include <memory>
 
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::executors::MultiThreadedExecutor exec{rclcpp::ExecutorOptions(), 2};
+  rclcpp::executors::MultiThreadedExecutor exec{rclcpp::ExecutorOptions(), 3};
   rclcpp::NodeOptions options;
   auto camera_node = std::make_shared<zoo::ZooCamera>(options);
   auto segmenter = std::make_shared<zoo::Segmenter>(options);
+  auto rerun = std::make_shared<zoo::RerunForwarder>(options);
 
   exec.add_node(camera_node);
   exec.add_node(segmenter);
+  exec.add_node(rerun);
   exec.spin();
   rclcpp::shutdown();
   return 0;
