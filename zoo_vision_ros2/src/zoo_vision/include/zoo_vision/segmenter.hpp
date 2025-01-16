@@ -36,6 +36,8 @@ private:
   Eigen::Matrix<float32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> anchors_;
 
   std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>> imageSubscriber_;
+
+  std::shared_ptr<rclcpp::Publisher<zoo_msgs::msg::Image12m>> segmentationImagePublisher_;
   std::shared_ptr<rclcpp::Publisher<zoo_msgs::msg::Image4m>> maskPublisher_;
 };
 } // namespace zoo

@@ -22,11 +22,11 @@ class RerunForwarder : public rclcpp::Node {
 public:
   explicit RerunForwarder(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
 
-  void onImage(const zoo_msgs::msg::Image12m &msg);
-  void onMask(const zoo_msgs::msg::Image4m &msg);
+  void onImage(const char *const channel, const zoo_msgs::msg::Image12m &msg);
+  void onMask(const char *const channel, const zoo_msgs::msg::Image4m &msg);
 
   void *rsHandle_;
-  std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>> imageSubscriber_;
-  std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image4m>> maskSubscriber_;
+  std::vector<std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>>> imageSubscribers_;
+  std::vector<std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image4m>>> maskSubscribers_;
 };
 } // namespace zoo

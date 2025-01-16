@@ -58,6 +58,7 @@ namespace detail {
 template <class TMsg> cv::Mat3b wrapMat3bFromMsg(TMsg &msg) {
   // DANGER: casting away const. Data may be modified by opencv if we're not careful
   auto *dataPtr = reinterpret_cast<cv::Vec3b *>(const_cast<unsigned char *>(msg.data.data()));
+  assert(msg.step * msg.height <= TMsg::DATA_MAX_SIZE);
   return cv::Mat3b(msg.height, msg.width, dataPtr, msg.step);
 }
 } // namespace detail

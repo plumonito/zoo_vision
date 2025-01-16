@@ -21,6 +21,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 #include <rclcpp/time.hpp>
+#include <sensor_msgs/image_encodings.hpp>
 #include <torch/torch.h>
 
 #include <chrono>
@@ -58,6 +59,8 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", opt
       *this, "input_camera/image", 10, [this](const zoo_msgs::msg::Image12m &msg) { this->onImage(msg); });
 
   // Publish detections
+  segmentationImagePublisher_ =
+      rclcpp::create_publisher<zoo_msgs::msg::Image12m>(*this, "input_camera/detections/image", 10);
   maskPublisher_ = rclcpp::create_publisher<zoo_msgs::msg::Image4m>(*this, "input_camera/detections/mask", 10);
 }
 
@@ -66,24 +69,40 @@ void Segmenter::loadModel() {}
 void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
 
   const cv::Mat3b img = wrapMat3bFromMsg(imageMsg);
+  const float inputAspect = static_cast<float>(imageMsg.width) / imageMsg.height;
+  const int DETECTION_HEIGHT = 600;
 
-  cv::Mat3b imgFixSize = img.clone();
-  // cv::resize(img, imgFixSize, {1024, 1024});
+  torch::IValue detectionResult;
+  {
+    auto detectionImageMsg = std::make_unique<zoo_msgs::msg::Image12m>();
+    detectionImageMsg->header = imageMsg.header;
+    setMsgString(detectionImageMsg->encoding, sensor_msgs::image_encodings::BGR8);
+    detectionImageMsg->height = DETECTION_HEIGHT;
+    detectionImageMsg->width = DETECTION_HEIGHT * inputAspect;
+    detectionImageMsg->step = detectionImageMsg->width * 3 * sizeof(char);
+    cv::Mat3b detectionImage = wrapMat3bFromMsg(*detectionImageMsg);
 
-  // TODO: accept input as uint8
-  cv::Mat3f imgFixSizef;
-  imgFixSize.convertTo(imgFixSizef, CV_32FC3, 1.0f / 255);
+    cv::resize(img, detectionImage, detectionImage.size());
 
-  torch::Tensor imageTensor =
-      torch::from_blob(imgFixSizef.data, {imgFixSizef.rows, imgFixSizef.cols, imgFixSizef.channels()},
-                       torch::TensorOptions().dtype(torch::kFloat32));
+    // TODO: accept input as uint8
+    cv::Mat3f detectionImagef;
+    detectionImage.convertTo(detectionImagef, CV_32FC3, 1.0f / 255);
 
-  imageTensor = imageTensor.permute({2, 0, 1}).to(torch::kCUDA);
-  c10::List<torch::Tensor> imageList({imageTensor});
+    torch::Tensor imageTensor =
+        torch::from_blob(detectionImagef.data, {detectionImagef.rows, detectionImagef.cols, detectionImagef.channels()},
+                         torch::TensorOptions().dtype(torch::kFloat32));
 
-  // TorchScript models require a List[IValue] as input
-  torch::IValue result = model_.forward({imageList});
-  const auto detections = result.toTuple()->elements()[1].toList()[0].get().toGenericDict();
+    imageTensor = imageTensor.permute({2, 0, 1}).to(torch::kCUDA);
+    c10::List<torch::Tensor> imageList({imageTensor});
+
+    // TorchScript models require a List[IValue] as input
+    detectionResult = model_.forward({imageList});
+
+    // Publish image to have it in sync with masks
+    segmentationImagePublisher_->publish(std::move(detectionImageMsg));
+  }
+
+  const auto detections = detectionResult.toTuple()->elements()[1].toList()[0].get().toGenericDict();
 
   // const torch::Tensor boxes = detections.at("boxes").toTensor();
   // const torch::Tensor scores = detections.at("scores").toTensor().to(torch::kCPU);
