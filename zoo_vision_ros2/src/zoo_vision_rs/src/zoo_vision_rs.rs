@@ -73,10 +73,10 @@ pub extern "C" fn zoo_rs_image_callback(
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
-pub extern "C" fn zoo_rs_mask_callback(
+pub extern "C" fn zoo_rs_detection_callback(
     p_client: *mut RerunForwarder,
     p_channel: *const c_char,
-    msg: *const zoo_msgs::msg::rmw::Image4m,
+    msg: *const zoo_msgs::msg::rmw::Detection,
 ) -> u32 {
     if p_client.is_null() {
         return ZOO_VISION_ERROR;
@@ -86,7 +86,7 @@ pub extern "C" fn zoo_rs_mask_callback(
     let channel = unsafe { CStr::from_ptr(p_channel) }.to_str().unwrap();
     let msg = unsafe { &*msg };
 
-    let result = client.mask_callback(channel, msg);
+    let result = client.detection_callback(channel, msg);
     match result {
         Ok(_) => ZOO_VISION_OK,
         Err(e) => {

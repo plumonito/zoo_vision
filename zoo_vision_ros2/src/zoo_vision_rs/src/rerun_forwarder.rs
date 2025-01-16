@@ -54,40 +54,56 @@ impl RerunForwarder {
 
         let time_ns = nanosec_from_ros(&msg.header.stamp);
         self.recording.set_time_sequence("ros_time", time_ns);
-        self.recording.log(channel, &rr_image)?;
+        self.recording
+            .log(channel, &rr_image.with_draw_order(-1.0))?;
 
         // Clear out detections
         self.recording.set_time_sequence("ros_time", time_ns - 1);
-        self.recording
-            .log("input_camera/detections/mask", &rerun::Clear::flat())?;
 
+        for detection_id in 0..20 {
+            let channel = format!("{}/{}", "input_camera/detections", detection_id);
+            self.recording.log(channel, &rerun::Clear::flat())?;
+        }
         // println!("Test from forwarder, image id={}", unsafe {
         //     std::str::from_utf8_unchecked(msg.header.frame_id.data.as_slice())
         // });
         Ok(())
     }
 
-    pub fn mask_callback(
+    pub fn detection_callback(
         &mut self,
         channel: &str,
-        msg: &zoo_msgs::msg::rmw::Image4m,
+        msg: &zoo_msgs::msg::rmw::Detection,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Map message data to image array
         let data_view: ArrayBase<ndarray::ViewRepr<&u8>, Ix2> = unsafe {
-            ArrayView::from_shape_ptr((msg.height as usize, msg.width as usize), msg.data.as_ptr())
+            ArrayView::from_shape_ptr(
+                (msg.mask.height as usize, msg.mask.width as usize),
+                msg.mask.data.as_ptr(),
+            )
         };
 
+        let id = msg.detection_id as i32;
+
         // Create an rgba image
-        let mut image_rgba =
-            ndarray::Array::<u8, _>::zeros((msg.height as usize, msg.width as usize, 4).f());
-        image_rgba.slice_mut(s![.., .., 1]).fill(255);
+        let mut image_rgba = ndarray::Array::<u8, _>::zeros(
+            (msg.mask.height as usize, msg.mask.width as usize, 4).f(),
+        );
+        if id > 2 {
+            return Ok(());
+        }
+
+        image_rgba.slice_mut(s![.., .., id]).fill(255);
         data_view.assign_to(&mut image_rgba.index_axis_mut(Axis(2), 3));
 
         let rr_image =
             rerun::Image::from_color_model_and_tensor(rerun::ColorModel::RGBA, image_rgba).unwrap();
         self.recording
-            .set_time_sequence("ros_time", nanosec_from_ros(&msg.header.stamp));
-        self.recording.log(channel, &rr_image)?;
+            .set_time_sequence("ros_time", nanosec_from_ros(&msg.mask.header.stamp));
+        self.recording.log(
+            format!("{}/{}", channel, id),
+            &rr_image.with_draw_order(id as f32).with_opacity(0.3),
+        )?;
         // println!("Test from forwarder, mask id={}", unsafe {
         //     std::str::from_utf8_unchecked(msg.header.frame_id.data.as_slice())
         // });

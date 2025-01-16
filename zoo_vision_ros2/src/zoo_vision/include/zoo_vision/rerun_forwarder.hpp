@@ -13,8 +13,8 @@
 // zoo_vision. If not, see <https://www.gnu.org/licenses/>.
 
 #include "rclcpp/rclcpp.hpp"
+#include "zoo_msgs/msg/detection.hpp"
 #include "zoo_msgs/msg/image12m.hpp"
-#include "zoo_msgs/msg/image4m.hpp"
 #include <image_transport/image_transport.hpp>
 
 namespace zoo {
@@ -23,10 +23,10 @@ public:
   explicit RerunForwarder(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
 
   void onImage(const char *const channel, const zoo_msgs::msg::Image12m &msg);
-  void onMask(const char *const channel, const zoo_msgs::msg::Image4m &msg);
+  void onDetection(const char *const channel, const zoo_msgs::msg::Detection &msg);
 
   void *rsHandle_;
   std::vector<std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>>> imageSubscribers_;
-  std::vector<std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image4m>>> maskSubscribers_;
+  std::vector<std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Detection>>> detectionSubscribers_;
 };
 } // namespace zoo

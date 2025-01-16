@@ -12,6 +12,7 @@
 // You should have received a copy of the GNU General Public License along with
 // zoo_vision. If not, see <https://www.gnu.org/licenses/>.
 
+#include "zoo_msgs/msg/detection.hpp"
 #include "zoo_msgs/msg/image12m.hpp"
 #include "zoo_msgs/msg/image4m.hpp"
 
@@ -37,7 +38,7 @@ private:
 
   std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>> imageSubscriber_;
 
-  std::shared_ptr<rclcpp::Publisher<zoo_msgs::msg::Image12m>> segmentationImagePublisher_;
-  std::shared_ptr<rclcpp::Publisher<zoo_msgs::msg::Image4m>> maskPublisher_;
+  std::shared_ptr<rclcpp::Publisher<zoo_msgs::msg::Image12m>> detectionImagePublisher_;
+  std::shared_ptr<rclcpp::Publisher<zoo_msgs::msg::Detection>> detectionPublisher_;
 };
 } // namespace zoo

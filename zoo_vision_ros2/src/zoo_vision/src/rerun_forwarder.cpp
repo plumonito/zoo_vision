@@ -24,11 +24,12 @@ using namespace std::chrono_literals;
 #include <format>
 using CImage12m = zoo_msgs::msg::Image12m;
 using CImage4m = zoo_msgs::msg::Image4m;
+using CDetection = zoo_msgs::msg::Detection;
 extern "C" {
 extern uint32_t zoo_rs_init(void **zoo_rs_handle);
 extern uint32_t zoo_rs_test_me(void *zoo_rs_handle, char const *const frame_id);
 extern uint32_t zoo_rs_image_callback(void *zoo_rs_handle, char const *const channel, const CImage12m *);
-extern uint32_t zoo_rs_mask_callback(void *zoo_rs_handle, char const *const channel, const CImage4m *);
+extern uint32_t zoo_rs_detection_callback(void *zoo_rs_handle, char const *const channel, const CDetection *);
 }
 namespace {
 const std::string DEFAULT_VIDEO_URL = "data/sample_video.mp4";
@@ -52,11 +53,11 @@ RerunForwarder::RerunForwarder(const rclcpp::NodeOptions &options)
   subscribeImage("input_camera/detections/image");
   RCLCPP_INFO(get_logger(), "Image subscriber can loan messages: %d", imageSubscribers_[0]->can_loan_messages());
 
-  auto subscribeMask = [&](const char *const channel) {
-    maskSubscribers_.push_back(rclcpp::create_subscription<zoo_msgs::msg::Image4m>(
-        *this, channel, 10, [this, channel](const zoo_msgs::msg::Image4m &msg) { this->onMask(channel, msg); }));
+  auto subscribeDetection = [&](const char *const channel) {
+    detectionSubscribers_.push_back(rclcpp::create_subscription<zoo_msgs::msg::Detection>(
+        *this, channel, 10, [this, channel](const zoo_msgs::msg::Detection &msg) { this->onDetection(channel, msg); }));
   };
-  subscribeMask("input_camera/detections/mask");
+  subscribeDetection("input_camera/detections");
 
   zoo_rs_init(&rsHandle_);
 }
@@ -67,11 +68,11 @@ void RerunForwarder::onImage(const char *const channel, const zoo_msgs::msg::Ima
   zoo_rs_image_callback(rsHandle_, channel, &msg);
 }
 
-void RerunForwarder::onMask(const char *const channel, const zoo_msgs::msg::Image4m &msg) {
+void RerunForwarder::onDetection(const char *const channel, const zoo_msgs::msg::Detection &msg) {
   // auto frame_id = reinterpret_cast<const char *>(&msg.header.frame_id.data);
   // RCLCPP_INFO(get_logger(), "Received img (id=%s)", frame_id);
   // zoo_rs_test_me(rsHandle_, frame_id);
-  zoo_rs_mask_callback(rsHandle_, channel, &msg);
+  zoo_rs_detection_callback(rsHandle_, channel, &msg);
 }
 
 } // namespace zoo

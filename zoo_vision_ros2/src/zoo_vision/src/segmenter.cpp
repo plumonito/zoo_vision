@@ -59,9 +59,9 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", opt
       *this, "input_camera/image", 10, [this](const zoo_msgs::msg::Image12m &msg) { this->onImage(msg); });
 
   // Publish detections
-  segmentationImagePublisher_ =
+  detectionImagePublisher_ =
       rclcpp::create_publisher<zoo_msgs::msg::Image12m>(*this, "input_camera/detections/image", 10);
-  maskPublisher_ = rclcpp::create_publisher<zoo_msgs::msg::Image4m>(*this, "input_camera/detections/mask", 10);
+  detectionPublisher_ = rclcpp::create_publisher<zoo_msgs::msg::Detection>(*this, "input_camera/detections", 10);
 }
 
 void Segmenter::loadModel() {}
@@ -99,7 +99,7 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
     detectionResult = model_.forward({imageList});
 
     // Publish image to have it in sync with masks
-    segmentationImagePublisher_->publish(std::move(detectionImageMsg));
+    detectionImagePublisher_->publish(std::move(detectionImageMsg));
   }
 
   const auto detections = detectionResult.toTuple()->elements()[1].toList()[0].get().toGenericDict();
@@ -119,12 +119,13 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
 
     // cv::imwrite("test.png", maskCv);
 
-    auto maskMsg = std::make_unique<zoo_msgs::msg::Image4m>();
-    maskMsg->header = imageMsg.header;
-    copyMat1bToMsg(maskCv, *maskMsg);
+    // Publish detection message
+    auto detectionMsg = std::make_unique<zoo_msgs::msg::Detection>();
+    detectionMsg->detection_id = i;
+    detectionMsg->mask.header = imageMsg.header;
+    copyMat1bToMsg(maskCv, detectionMsg->mask);
 
-    maskPublisher_->publish(std::move(maskMsg));
-    break;
+    detectionPublisher_->publish(std::move(detectionMsg));
   }
 }
 
