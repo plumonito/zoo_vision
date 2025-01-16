@@ -36,8 +36,9 @@ find_package(TorchVision REQUIRED)
 # zoo_vision_rs
 add_library(zoo_vision_rs STATIC IMPORTED)
 set_target_properties(zoo_vision_rs PROPERTIES 
-  IMPORTED_LOCATION  /home/dherrera/git/zoo_vision/zoo_vision_ros2/build/zoo_vision_rs/debug/libzoo_vision_rs.a
-  IMPORTED_LOCATION_RELEASE  /home/dherrera/git/zoo_vision/zoo_vision_ros2/build/zoo_vision_rs/release/libzoo_vision_rs.a)
+  IMPORTED_LOCATION_DEBUG   /home/dherrera/git/zoo_vision/zoo_vision_ros2/build/zoo_vision_rs/debug/libzoo_vision_rs.a
+  IMPORTED_LOCATION_RELEASE /home/dherrera/git/zoo_vision/zoo_vision_ros2/build/zoo_vision_rs/release/libzoo_vision_rs.a
+  IMPORTED_LOCATION_RELWITHDEBINFO /home/dherrera/git/zoo_vision/zoo_vision_ros2/build/zoo_vision_rs/release/libzoo_vision_rs.a)
 
 ####################################
 # zoo_vision package
