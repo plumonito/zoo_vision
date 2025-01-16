@@ -19,7 +19,7 @@
 
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::executors::SingleThreadedExecutor exec;
+  rclcpp::executors::MultiThreadedExecutor exec{rclcpp::ExecutorOptions(), 2};
   rclcpp::NodeOptions options;
   auto camera_node = std::make_shared<zoo::ZooCamera>(options);
   auto segmenter = std::make_shared<zoo::Segmenter>(options);
