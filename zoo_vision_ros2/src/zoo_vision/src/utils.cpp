@@ -16,6 +16,8 @@
 
 #include <sensor_msgs/image_encodings.hpp>
 
+#include <ATen/ops/from_blob.h>
+
 #include <filesystem>
 #include <string.h>
 
@@ -77,4 +79,8 @@ void copyMat1bToMsg(const cv::Mat1b &img, zoo_msgs::msg::Image4m &msg) {
   memcpy(msg.data.data(), img.data, byteCount);
 }
 
+at::Tensor mapRosTensor(zoo_msgs::msg::Tensor3b32m &rosTensor) {
+  return at::from_blob(rosTensor.data.data(), {rosTensor.sizes[0], rosTensor.sizes[1], rosTensor.sizes[2]},
+                       at::TensorOptions().dtype(at::kByte));
+}
 } // namespace zoo

@@ -26,7 +26,8 @@ set(msg_files
   "msg/Image8m.msg"
   "msg/Image12m.msg"
   "msg/BoundingBox2D.msg"
-  "msg/Detection.msg"
+  "msg/Tensor3b32m.msg"
+  "msg/Detection.msg" 
 )
 rosidl_generate_interfaces(${PROJECT_NAME}
   ${msg_files}

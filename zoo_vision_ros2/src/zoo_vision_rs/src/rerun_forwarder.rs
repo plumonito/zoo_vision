@@ -6,8 +6,6 @@ use rerun::{
 };
 use std::path::Path;
 
-const MAX_DETECTION_COUNT: i32 = 5;
-
 pub struct RerunForwarder {
     recording: rerun::RecordingStream,
 }
@@ -89,60 +87,72 @@ impl RerunForwarder {
         channel: &str,
         msg: &zoo_msgs::msg::rmw::Detection,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let id = msg.detection_id as i32;
-        if id >= MAX_DETECTION_COUNT {
-            return Ok(());
-        }
+        // // println!("Test from forwarder, mask id={}", unsafe {
+        //     std::str::from_utf8_unchecked(msg.header.frame_id.data.as_slice())
+        // });
+        let detection_count = msg.detection_count as usize;
 
         // Map message data to image array
-        let data_view: ArrayBase<ndarray::ViewRepr<&u8>, Ix2> = unsafe {
+        assert!(msg.detection_count == msg.masks.sizes[0]);
+        let mask_height = msg.masks.sizes[1] as usize;
+        let mask_width = msg.masks.sizes[2] as usize;
+        let masks: ArrayBase<ndarray::ViewRepr<&u8>, Ix3> = unsafe {
             ArrayView::from_shape_ptr(
-                (msg.mask.height as usize, msg.mask.width as usize),
-                msg.mask.data.as_ptr(),
+                (detection_count, mask_height, mask_width),
+                msg.masks.data.as_ptr(),
             )
+        };
+
+        let world_positions: ArrayBase<ndarray::ViewRepr<&f32>, Ix2> = unsafe {
+            ArrayView::from_shape_ptr((detection_count, 3), msg.world_positions.as_ptr())
         };
 
         // Set rerun time
         self.recording
-            .set_time_sequence("ros_time", nanosec_from_ros(&msg.mask.header.stamp));
+            .set_time_sequence("ros_time", nanosec_from_ros(&msg.header.stamp));
 
-        // Log image
-        // Create an rgba image
-        let mut image_rgb = ndarray::Array::<u8, _>::zeros(
-            (msg.mask.height as usize, msg.mask.width as usize, 3).f(),
-        );
-        let color_idx = (id % 3) as usize;
-        data_view.assign_to(&mut image_rgb.index_axis_mut(Axis(2), color_idx));
+        for id in 0..detection_count {
+            let bbox = &msg.bboxes[id];
+            let world_position = world_positions.slice(s![id, ..]);
 
-        let rr_image =
-            rerun::Image::from_color_model_and_tensor(rerun::ColorModel::RGB, image_rgb).unwrap();
-        self.recording.log(
-            format!("{}/{}/mask", channel, id),
-            &rr_image.with_draw_order(id as f32).with_opacity(0.3),
-        )?;
+            // Log image
+            // Create an rgba image
+            let mut image_rgb = ndarray::Array::<u8, _>::zeros((mask_height, mask_width, 3).f());
+            let color_idx = (id % 3) as usize;
+            masks
+                .slice(s![id, .., ..])
+                .assign_to(&mut image_rgb.index_axis_mut(Axis(2), color_idx));
 
-        // Log bounding box
-        self.recording.log(
-            format!("{}/{}/box", channel, id),
-            &rerun::Boxes2D::from_centers_and_half_sizes(
-                [(msg.bbox.center[0], msg.bbox.center[1])],
-                [(msg.bbox.half_size[0], msg.bbox.half_size[1])],
-            ),
-        )?;
+            let rr_image =
+                rerun::Image::from_color_model_and_tensor(rerun::ColorModel::RGB, image_rgb)
+                    .unwrap();
+            self.recording.log(
+                format!("{}/{}/mask", channel, id),
+                &rr_image.with_draw_order(id as f32).with_opacity(0.3),
+            )?;
 
-        // Log position in world
-        let world_points_rr =
-            rerun::Points2D::new([(msg.world_position[0], msg.world_position[1])]);
-        let mut color = [0, 0, 0];
-        color[color_idx] = 255;
-        let color_rr = rerun::Color::from_unmultiplied_rgba(color[0], color[1], color[2], 76);
-        self.recording.log(
-            format!("world/input_camera/detections/{}", id),
-            &world_points_rr.with_colors([color_rr]).with_radii([20.0]),
-        )?;
-        // // println!("Test from forwarder, mask id={}", unsafe {
-        //     std::str::from_utf8_unchecked(msg.header.frame_id.data.as_slice())
-        // });
+            let mut color = [0, 0, 0];
+            color[color_idx] = 255;
+            let color_rr = rerun::Color::from_unmultiplied_rgba(color[0], color[1], color[2], 76);
+
+            // Log bounding box
+            self.recording.log(
+                format!("{}/{}/box", channel, id),
+                &rerun::Boxes2D::from_centers_and_half_sizes(
+                    [(bbox.center[0], bbox.center[1])],
+                    [(bbox.half_size[0], bbox.half_size[1])],
+                )
+                .with_colors([color_rr]),
+            )?;
+
+            // Log position in world
+            let world_points_rr = rerun::Points2D::new([(world_position[0], world_position[1])]);
+            self.recording.log(
+                format!("world/input_camera/detections/{}", id),
+                &world_points_rr.with_colors([color_rr]).with_radii([20.0]),
+            )?;
+        }
+
         Ok(())
     }
 }

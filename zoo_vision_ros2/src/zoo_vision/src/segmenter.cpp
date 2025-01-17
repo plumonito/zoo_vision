@@ -70,6 +70,9 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", opt
 void Segmenter::loadModel() {}
 
 void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
+  // Allocate detection message so we can already start putting things here
+  auto detectionMsg = std::make_unique<zoo_msgs::msg::Detection>();
+  detectionMsg->header = imageMsg.header;
 
   const cv::Mat3b img = wrapMat3bFromMsg(imageMsg);
   const float inputAspect = static_cast<float>(imageMsg.width) / imageMsg.height;
@@ -107,63 +110,59 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
 
   const auto detections = detectionResult.toTuple()->elements()[1].toList()[0].get().toGenericDict();
 
-  // Masks to u8
-  const torch::Tensor masksGpu = detections.at("masks").toTensor();
-  const torch::Tensor masksbGpu = masksGpu.mul(255).clamp(0, 255).to(torch::kU8);
-
-  // Move all to cpu
-  const torch::Tensor boxes = detections.at("boxes").toTensor().to(torch::kCPU);
-  const torch::Tensor masksb = masksbGpu.to(torch::kCPU);
+  // Results in gpu
+  const torch::Tensor masksfGpu = detections.at("masks").toTensor().squeeze(1);
+  const torch::Tensor boxesGpu = detections.at("boxes").toTensor();
   // const torch::Tensor scores = detections.at("scores").toTensor().to(torch::kCPU);
 
-  assert(boxes.dim() == 2);
-  assert(boxes.sizes()[0] == masksb.sizes()[0]);
-  assert(masksb.dim() == 4);
-  constexpr int64_t MAX_DETECTION_COUNT = 5;
-  const int64_t detectionCount = std::min(MAX_DETECTION_COUNT, masksGpu.sizes()[0]);
+  // Masks to u8
+  const torch::Tensor masksGpu = masksfGpu.mul(255).clamp(0, 255).to(torch::kU8);
 
-  // Order the detections so they have roughly the same id over time
-  const auto xcoords = boxes.slice(0, 0, detectionCount).slice(1, 0, 1);
-  torch::Tensor sortedIndices = xcoords.argsort(0l);
+  // Check dimensions
+  assert(boxesGpu.dim() == 2);
+
+  constexpr int64_t MAX_DETECTION_COUNT = 5;
+  const int64_t detectionCount = std::min(MAX_DETECTION_COUNT, boxesGpu.sizes()[0]);
+
+  assert(masksGpu.dim() == 3);
+  assert(boxesGpu.sizes()[0] == masksGpu.sizes()[0]);
+  const int64_t maskHeight = masksGpu.sizes()[1];
+  const int64_t maskWidth = masksGpu.sizes()[2];
+  const float32_t resizeFactor = static_cast<float32_t>(img.rows) / maskHeight;
+
+  detectionMsg->detection_count = detectionCount;
+  detectionMsg->masks.sizes[0] = detectionCount;
+  detectionMsg->masks.sizes[1] = maskHeight;
+  detectionMsg->masks.sizes[2] = maskWidth;
+  torch::Tensor masksMap = mapRosTensor(detectionMsg->masks);
+
+  // Move all to cpu
+  const torch::Tensor boxesNet = boxesGpu.index({Slice(0, detectionCount)}).to(torch::kCPU);
+  masksMap.copy_(masksGpu.index({Slice(0, detectionCount)}));
+
+  Eigen::Map<Eigen::Matrix3Xf> worldPositionsMap{detectionMsg->world_positions.data(), 3, detectionCount};
 
   for (int i = 0; i < detectionCount; ++i) {
-    auto j = sortedIndices[i].item<int64_t>();
-    const torch::Tensor bbox = boxes.index({j});
-    const torch::Tensor maskb = masksb.index({j, 0});
-
-    assert(maskb.stride(1) == 1);
-    const cv::Mat1b maskCv(maskb.sizes()[0], maskb.sizes()[1], maskb.data_ptr<uchar>(), maskb.stride(0) * sizeof(char));
-
-    const float32_t resizeFactor = static_cast<float32_t>(img.rows) / maskCv.rows;
-
-    // cv::imwrite("test.png", maskCv);
-    // Publish detection message
-    auto detectionMsg = std::make_unique<zoo_msgs::msg::Detection>();
-    detectionMsg->detection_id = i;
+    const torch::Tensor bbox = boxesNet[i];
 
     // Bbox
     const Eigen::Vector2f x0{bbox[0].item<float32_t>(), bbox[1].item<float32_t>()};
     const Eigen::Vector2f x1{bbox[2].item<float32_t>(), bbox[3].item<float32_t>()};
     const Eigen::Vector2f center = (x0 + x1) / 2;
     const Eigen::Vector2f halfSize = x1 - center;
-    detectionMsg->bbox.center[0] = center[0];
-    detectionMsg->bbox.center[1] = center[1];
-    detectionMsg->bbox.half_size[0] = halfSize[0];
-    detectionMsg->bbox.half_size[1] = halfSize[1];
+    detectionMsg->bboxes[i].center[0] = center[0];
+    detectionMsg->bboxes[i].center[1] = center[1];
+    detectionMsg->bboxes[i].half_size[0] = halfSize[0];
+    detectionMsg->bboxes[i].half_size[1] = halfSize[1];
 
     // Project to world
-    const Eigen::Vector2f floorCenter = (center + Eigen::Vector2f{0, halfSize[1]}) * resizeFactor;
+    const Eigen::Vector2f imagePosition = (center + Eigen::Vector2f{0, halfSize[1]}) * resizeFactor;
 
-    const Eigen::Vector3f worldCenter = (H_worldFromCamera_ * floorCenter.homogeneous()).hnormalized().homogeneous();
-    detectionMsg->world_position[0] = worldCenter[0];
-    detectionMsg->world_position[1] = worldCenter[1];
-    detectionMsg->world_position[2] = worldCenter[2];
-
-    detectionMsg->mask.header = imageMsg.header;
-    copyMat1bToMsg(maskCv, detectionMsg->mask);
-
-    detectionPublisher_->publish(std::move(detectionMsg));
+    const Eigen::Vector3f worldPosition =
+        (H_worldFromCamera_ * imagePosition.homogeneous()).hnormalized().homogeneous();
+    worldPositionsMap.col(i) = worldPosition;
   }
+  detectionPublisher_->publish(std::move(detectionMsg));
 }
 
 } // namespace zoo
