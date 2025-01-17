@@ -18,6 +18,7 @@
 
 #include <opencv2/core/mat.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
 #include <rclcpp/time.hpp>
 #include <sensor_msgs/image_encodings.hpp>
 
@@ -70,6 +71,10 @@ void ZooCamera::onTimer() {
       frameIndex_ = 0;
       cvStream_ >> image;
     }
+
+    // TODO: converting BGR->RGB like this is inefficient!
+    cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
+
     setMsgString(msg->header.frame_id, std::to_string(frameIndex_).c_str());
 
     frameIndex_++;
