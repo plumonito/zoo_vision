@@ -113,6 +113,8 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
   // Results in gpu
   const torch::Tensor masksfGpu = detections.at("masks").toTensor().squeeze(1);
   const torch::Tensor boxesGpu = detections.at("boxes").toTensor();
+  const torch::Tensor labelsGpu = detections.at("labels").toTensor();
+
   // const torch::Tensor scores = detections.at("scores").toTensor().to(torch::kCPU);
 
   // Masks to u8
@@ -121,8 +123,8 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
   // Check dimensions
   assert(boxesGpu.dim() == 2);
 
-  constexpr int64_t MAX_DETECTION_COUNT = 5;
-  const int64_t detectionCount = std::min(MAX_DETECTION_COUNT, boxesGpu.sizes()[0]);
+  const int64_t MAX_DETECTION_COUNT = zoo_msgs::msg::Detection::MAX_DETECTION_COUNT;
+  const int64_t modelDetectionCount = std::min(MAX_DETECTION_COUNT, boxesGpu.sizes()[0]);
 
   assert(masksGpu.dim() == 3);
   assert(boxesGpu.sizes()[0] == masksGpu.sizes()[0]);
@@ -130,38 +132,54 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
   const int64_t maskWidth = masksGpu.sizes()[2];
   const float32_t resizeFactor = static_cast<float32_t>(img.rows) / maskHeight;
 
-  detectionMsg->detection_count = detectionCount;
-  detectionMsg->masks.sizes[0] = detectionCount;
+  detectionMsg->detection_count = MAX_DETECTION_COUNT;
+  detectionMsg->masks.sizes[0] = MAX_DETECTION_COUNT;
   detectionMsg->masks.sizes[1] = maskHeight;
   detectionMsg->masks.sizes[2] = maskWidth;
   torch::Tensor masksMap = mapRosTensor(detectionMsg->masks);
 
   // Move all to cpu
-  const torch::Tensor boxesNet = boxesGpu.index({Slice(0, detectionCount)}).to(torch::kCPU);
-  masksMap.copy_(masksGpu.index({Slice(0, detectionCount)}));
+  const torch::Tensor boxesNet = boxesGpu.index({Slice(0, modelDetectionCount)}).to(torch::kCPU);
+  const torch::Tensor labels = labelsGpu.index({Slice(0, modelDetectionCount)}).to(torch::kCPU);
+  const torch::Tensor masks = masksGpu.index({Slice(0, modelDetectionCount)}).to(torch::kCPU);
 
-  Eigen::Map<Eigen::Matrix3Xf> worldPositionsMap{detectionMsg->world_positions.data(), 3, detectionCount};
+  Eigen::Map<Eigen::Matrix3Xf> worldPositionsMap{detectionMsg->world_positions.data(), 3, modelDetectionCount};
 
-  for (int i = 0; i < detectionCount; ++i) {
-    const torch::Tensor bbox = boxesNet[i];
+  const int ELEPHANT_LABEL_ID = 22;
+  int outIndex = 0;
+  for (int i = 0; i < modelDetectionCount; ++i) {
+    const int label = labels[i].item<int>();
+    if (label != ELEPHANT_LABEL_ID) {
+      continue;
+    }
+
+    // Mask
+    const torch::Tensor mask = masks[i];
+    masksMap[outIndex].copy_(mask);
 
     // Bbox
+    const torch::Tensor bbox = boxesNet[i];
     const Eigen::Vector2f x0{bbox[0].item<float32_t>(), bbox[1].item<float32_t>()};
     const Eigen::Vector2f x1{bbox[2].item<float32_t>(), bbox[3].item<float32_t>()};
     const Eigen::Vector2f center = (x0 + x1) / 2;
     const Eigen::Vector2f halfSize = x1 - center;
-    detectionMsg->bboxes[i].center[0] = center[0];
-    detectionMsg->bboxes[i].center[1] = center[1];
-    detectionMsg->bboxes[i].half_size[0] = halfSize[0];
-    detectionMsg->bboxes[i].half_size[1] = halfSize[1];
+    detectionMsg->bboxes[outIndex].center[0] = center[0];
+    detectionMsg->bboxes[outIndex].center[1] = center[1];
+    detectionMsg->bboxes[outIndex].half_size[0] = halfSize[0];
+    detectionMsg->bboxes[outIndex].half_size[1] = halfSize[1];
 
     // Project to world
     const Eigen::Vector2f imagePosition = (center + Eigen::Vector2f{0, halfSize[1]}) * resizeFactor;
 
     const Eigen::Vector3f worldPosition =
         (H_worldFromCamera_ * imagePosition.homogeneous()).hnormalized().homogeneous();
-    worldPositionsMap.col(i) = worldPosition;
+    worldPositionsMap.col(outIndex) = worldPosition;
+
+    outIndex += 1;
   }
+  detectionMsg->detection_count = outIndex;
+  detectionMsg->masks.sizes[0] = outIndex;
+
   detectionPublisher_->publish(std::move(detectionMsg));
 }
 
