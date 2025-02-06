@@ -17,3 +17,6 @@ tf2onnx==1.16.1
 opencv-python
 torch
 torchvision
+lark
+git+https://github.com/plumonito/sam2
+pycocotools

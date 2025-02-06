@@ -2,6 +2,12 @@
 	"folders": [
 		{
 			"path": ".."
+		},
+		{
+			"path": "../../sam2"
+		},
+		{
+			"path": "../../vision"
 		}
 	],
 	"settings": {

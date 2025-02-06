@@ -31,12 +31,21 @@ pip3 install lark
 colcon build
 
 # Bazel (for tensorflow)
-sudo apt install apt-transport-https curl gnupg -y
-curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor >bazel-archive-keyring.gpg
-sudo mv bazel-archive-keyring.gpg /usr/share/keyrings
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/bazel-archive-keyring.gpg] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
-sudo apt update
-sudo apt install bazel
+# sudo apt install apt-transport-https curl gnupg -y
+# curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor >bazel-archive-keyring.gpg
+# sudo mv bazel-archive-keyring.gpg /usr/share/keyrings
+# echo "deb [arch=amd64 signed-by=/usr/share/keyrings/bazel-archive-keyring.gpg] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
+# sudo apt update
+# sudo apt install bazel
 
-# Build torchvision
-CXXFLAGS=-D__CUDA_NO_HALF_CONVERSIONS__,-D__CUDA_NO_BFLOAT16_CONVERSIONS__,-D__CUDA_NO_HALF2_OPERATORS__ cmake .. -G Ninja -DWITH_CUDA=1 -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=~/Downloads/libtorch-cxx11-abi-shared-with-deps-2.5.1+cu124/libtorch/share/cmake/Torch -DCMAKE_INSTALL_PREFIX=../install -DCUDA_NVCC_FLAGS="-D__CUDA_NO_HALF_CONVERSIONS__;-D__CUDA_NO_BFLOAT16_CONVERSIONS__;-D__CUDA_NO_HALF2_OPERATORS__"
+# Torch
+curl -o ~/Downloads/libtorch-2.5.1.zip https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip
+unzip ~/Downloads/libtorch-2.5.1.zip -d ~/Downloads/libtorch-2.5.1
+tar 
+# Torchvision
+git clone git@github.com:pytorch/vision.git
+CXXFLAGS=-D__CUDA_NO_HALF_CONVERSIONS__,-D__CUDA_NO_BFLOAT16_CONVERSIONS__,-D__CUDA_NO_HALF2_OPERATORS__ cmake .. -G Ninja -DWITH_CUDA=1 -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=~/Downloads/libtorch-2.5.1/libtorch/share/cmake/Torch -DCMAKE_INSTALL_PREFIX=../install -DCUDA_NVCC_FLAGS="-D__CUDA_NO_HALF_CONVERSIONS__;-D__CUDA_NO_BFLOAT16_CONVERSIONS__;-D__CUDA_NO_HALF2_OPERATORS__"
+
+# Sam2
+mkdir -p models/sam2
+wget -P models/sam2/ https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt
