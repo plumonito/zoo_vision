@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
-project(zoo_vision)
+
+set(CMAKE_CUDA_ARCHITECTURES native)
+set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
+
+project(zoo_vision LANGUAGES CUDA CXX)
 
 include(FetchContent)
 
@@ -27,11 +31,10 @@ FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download
 FetchContent_MakeAvailable(TorchRelease json)
 
 # torch
-set(CMAKE_CUDA_ARCHITECTURES native)
 list(APPEND CMAKE_PREFIX_PATH "${torchrelease_SOURCE_DIR}")
 find_package(Torch REQUIRED)
 
-list(APPEND CMAKE_PREFIX_PATH "/home/dherrera/git/vision/install")
+list(APPEND CMAKE_PREFIX_PATH "/home/dherrera/install/vision")
 find_package(TorchVision REQUIRED)
 
 # zoo_vision_rs

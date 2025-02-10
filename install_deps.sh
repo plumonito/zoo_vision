@@ -40,12 +40,18 @@ colcon build
 
 # Torch
 curl -o ~/Downloads/libtorch-2.5.1.zip https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip
-unzip ~/Downloads/libtorch-2.5.1.zip -d ~/Downloads/libtorch-2.5.1
-tar 
+mkdir ~/install
+unzip ~/Downloads/libtorch-2.5.1.zip -d ~/install/libtorch-2.5.1
+
 # Torchvision
+cd ~/git
 git clone git@github.com:pytorch/vision.git
-CXXFLAGS=-D__CUDA_NO_HALF_CONVERSIONS__,-D__CUDA_NO_BFLOAT16_CONVERSIONS__,-D__CUDA_NO_HALF2_OPERATORS__ cmake .. -G Ninja -DWITH_CUDA=1 -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=~/Downloads/libtorch-2.5.1/libtorch/share/cmake/Torch -DCMAKE_INSTALL_PREFIX=../install -DCUDA_NVCC_FLAGS="-D__CUDA_NO_HALF_CONVERSIONS__;-D__CUDA_NO_BFLOAT16_CONVERSIONS__;-D__CUDA_NO_HALF2_OPERATORS__"
+mkdir -p ~/build/vision
+cd ~/build/vision
+CXXFLAGS=-D__CUDA_NO_HALF_CONVERSIONS__,-D__CUDA_NO_BFLOAT16_CONVERSIONS__,-D__CUDA_NO_HALF2_OPERATORS__ cmake ~/git/vision -G Ninja -DWITH_CUDA=1 -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=~/install/libtorch-2.5.1/libtorch/share/cmake/Torch -DCMAKE_INSTALL_PREFIX=~/install/vision -DCUDA_NVCC_FLAGS="-D__CUDA_NO_HALF_CONVERSIONS__;-D__CUDA_NO_BFLOAT16_CONVERSIONS__;-D__CUDA_NO_HALF2_OPERATORS__"
+ninja install
 
 # Sam2
+cd ~/git/zoo_vision
 mkdir -p models/sam2
 wget -P models/sam2/ https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt
