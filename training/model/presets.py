@@ -37,7 +37,9 @@ class DetectionPresetTrain:
         elif backend == "tensor":
             transforms.append(T.PILToTensor())
         elif backend != "pil":
-            raise ValueError(f"backend can be 'tv_tensor', 'tensor' or 'pil', but got {backend}")
+            raise ValueError(
+                f"backend can be 'tv_tensor', 'tensor' or 'pil', but got {backend}"
+            )
 
         if data_augmentation == "hflip":
             transforms += [T.RandomHorizontalFlip(p=hflip_prob)]
@@ -50,11 +52,18 @@ class DetectionPresetTrain:
             ]
         elif data_augmentation == "multiscale":
             transforms += [
-                T.RandomShortestSize(min_size=(480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800), max_size=1333),
+                T.RandomShortestSize(
+                    min_size=(480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800),
+                    max_size=1333,
+                ),
                 T.RandomHorizontalFlip(p=hflip_prob),
             ]
         elif data_augmentation == "ssd":
-            fill = defaultdict(lambda: mean, {tv_tensors.Mask: 0}) if use_v2 else list(mean)
+            fill = (
+                defaultdict(lambda: mean, {tv_tensors.Mask: 0})
+                if use_v2
+                else list(mean)
+            )
             transforms += [
                 T.RandomPhotometricDistort(),
                 T.RandomZoomOut(fill=fill),
@@ -101,7 +110,9 @@ class DetectionPresetEval:
         elif backend == "tv_tensor":
             transforms += [T.ToImage()]
         else:
-            raise ValueError(f"backend can be 'tv_tensor', 'tensor' or 'pil', but got {backend}")
+            raise ValueError(
+                f"backend can be 'tv_tensor', 'tensor' or 'pil', but got {backend}"
+            )
 
         transforms += [T.ToDtype(torch.float, scale=True)]
 
