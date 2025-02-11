@@ -29,7 +29,7 @@ import torchvision
 import torchvision.models.detection
 import torchvision.models.detection.mask_rcnn
 import utils
-from coco_utils import get_coco
+from coco_utils import get_coco, get_zoo_elephants_ds
 from engine import evaluate, train_one_epoch
 from group_by_aspect_ratio import create_aspect_ratio_groups, GroupedBatchSampler
 from torchvision.transforms import InterpolationMode
@@ -45,18 +45,29 @@ def copypaste_collate_fn(batch):
 
 def get_dataset(is_train, args):
     image_set = "train" if is_train else "val"
-    num_classes, mode = {"coco": (91, "instances"), "coco_kp": (2, "person_keypoints")}[
-        args.dataset
-    ]
     with_masks = "mask" in args.model
-    ds = get_coco(
-        root=args.data_path,
-        image_set=image_set,
-        transforms=get_transform(is_train, args),
-        mode=mode,
-        use_v2=args.use_v2,
-        with_masks=with_masks,
-    )
+    if args.dataset.startswith("coco"):
+        num_classes, mode = {
+            "coco": (91, "instances"),
+            "coco_kp": (2, "person_keypoints"),
+        }[args.dataset]
+        ds = get_coco(
+            root=args.data_path,
+            image_set=image_set,
+            transforms=get_transform(is_train, args),
+            mode=mode,
+            use_v2=args.use_v2,
+            with_masks=with_masks,
+        )
+    elif args.dataset == "zoo_elephants":
+        num_classes = 91
+        ds = get_zoo_elephants_ds(
+            root=args.data_path,
+            image_set=image_set,
+            transforms=get_transform(is_train, args),
+            use_v2=args.use_v2,
+            with_masks=with_masks,
+        )
     return ds, num_classes
 
 
@@ -264,8 +275,8 @@ def get_args_parser(add_help=True):
 def main(args):
     if args.backend.lower() == "tv_tensor" and not args.use_v2:
         raise ValueError("Use --use-v2 if you want to use the tv_tensor backend.")
-    if args.dataset not in ("coco", "coco_kp"):
-        raise ValueError(f"Dataset should be coco or coco_kp, got {args.dataset}")
+    # if args.dataset not in ("coco", "coco_kp"):
+    #     raise ValueError(f"Dataset should be coco or coco_kp, got {args.dataset}")
     if "keypoint" in args.model and args.dataset != "coco_kp":
         raise ValueError("Oops, if you want Keypoint detection, set --dataset coco_kp")
     if args.dataset == "coco_kp" and args.use_v2:
@@ -415,6 +426,15 @@ def main(args):
         torch.backends.cudnn.deterministic = True
         evaluate(model, data_loader_test, device=device)
         return
+
+    checkpoint = {
+        "model": model_without_ddp.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "lr_scheduler": lr_scheduler.state_dict(),
+        "args": args,
+        "epoch": -1,
+    }
+    utils.save_on_master(checkpoint, os.path.join(args.output_dir, f"model_base.pth"))
 
     print("Start training")
     start_time = time.time()

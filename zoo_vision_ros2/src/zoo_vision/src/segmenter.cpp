@@ -50,8 +50,8 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", opt
 
   // Load model
   {
-    const auto modelDir = cameraDir / "segmentation";
-    const std::string modelPath = modelDir / "torch.pt";
+    const auto modelDir = getDataPath().parent_path() / "models";
+    const std::string modelPath = modelDir / "maskrcnn_trained.ptc";
 
     model_ = torch::jit::load(modelPath, torch::kCUDA);
     // DEBUG print model info

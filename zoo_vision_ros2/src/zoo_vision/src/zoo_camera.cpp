@@ -32,7 +32,8 @@ const std::string DEFAULT_VIDEO_NAME = "sample_video.mp4";
 namespace zoo {
 
 ZooCamera::ZooCamera(const rclcpp::NodeOptions &options) : Node("input_camera", options) {
-  videoUrl_ = declare_parameter<std::string>("videoUrl", getDataPath() / DEFAULT_VIDEO_NAME);
+  // videoUrl_ = declare_parameter<std::string>("videoUrl", getDataPath() / DEFAULT_VIDEO_NAME);
+  videoUrl_ = "/home/dherrera/data/elephants/new_elephant_data/Kamera 01/20240907PM/trim.mp4";
 
   bool ok = cvStream_.open(videoUrl_);
   if (ok) {

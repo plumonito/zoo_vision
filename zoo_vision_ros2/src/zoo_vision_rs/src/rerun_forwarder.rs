@@ -85,15 +85,15 @@ impl RerunForwarder {
             .log(channel, &rr_image.with_draw_order(-1.0))?;
 
         // Clear out detections
-        self.recording.set_time_nanos("ros_time", time_ns - 1);
+        // self.recording.set_time_nanos("ros_time", time_ns - 1);
 
-        let camera_name = "input_camera";
-        let image_detections_ent = format!("{}/detections", camera_name);
-        self.recording
-            .log(image_detections_ent, &rerun::Clear::recursive())?;
-        let world_detections_ent = format!("world/{}/detections", camera_name);
-        self.recording
-            .log(world_detections_ent, &rerun::Clear::recursive())?;
+        // let camera_name = "input_camera";
+        // let image_detections_ent = format!("{}/detections", camera_name);
+        // self.recording
+        //     .log(image_detections_ent, &rerun::Clear::recursive())?;
+        // let world_detections_ent = format!("world/{}/detections", camera_name);
+        // self.recording
+        //     .log(world_detections_ent, &rerun::Clear::recursive())?;
         // println!("Test from forwarder, image id={}", unsafe {
         //     std::str::from_utf8_unchecked(msg.header.frame_id.data.as_slice())
         // });

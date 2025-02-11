@@ -18,5 +18,6 @@ opencv-python
 torch
 torchvision
 lark
-git+https://github.com/plumonito/sam2
+git+https://github.com/plumonito/sam2 # Custom repo to allow passing images directly 
 pycocotools
+fiftyone # To browse coco datasets and predictions
