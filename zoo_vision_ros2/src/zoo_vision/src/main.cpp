@@ -21,7 +21,10 @@
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
   rclcpp::executors::MultiThreadedExecutor exec{rclcpp::ExecutorOptions(), 3};
+
   rclcpp::NodeOptions options;
+  options.use_intra_process_comms(true);
+
   auto camera_node = std::make_shared<zoo::ZooCamera>(options);
   auto segmenter = std::make_shared<zoo::Segmenter>(options);
   auto rerun = std::make_shared<zoo::RerunForwarder>(options);
