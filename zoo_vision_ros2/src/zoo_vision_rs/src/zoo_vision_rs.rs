@@ -53,6 +53,7 @@ pub extern "C" fn zoo_rs_test_me(p_client: *mut RerunForwarder, frame_id: *const
 #[no_mangle]
 pub extern "C" fn zoo_rs_image_callback(
     p_client: *mut RerunForwarder,
+    p_camera: *const c_char,
     p_channel: *const c_char,
     msg: *const zoo_msgs::msg::rmw::Image12m,
 ) -> u32 {
@@ -61,10 +62,11 @@ pub extern "C" fn zoo_rs_image_callback(
     }
 
     let client: &mut RerunForwarder = unsafe { &mut *p_client };
+    let camera = unsafe { CStr::from_ptr(p_camera) }.to_str().unwrap();
     let channel = unsafe { CStr::from_ptr(p_channel) }.to_str().unwrap();
     let msg = unsafe { &*msg };
 
-    let result = client.image_callback(channel, msg);
+    let result = client.image_callback(camera, channel, msg);
     match result {
         Ok(_) => ZOO_VISION_OK,
         Err(e) => {
@@ -78,6 +80,7 @@ pub extern "C" fn zoo_rs_image_callback(
 #[no_mangle]
 pub extern "C" fn zoo_rs_detection_callback(
     p_client: *mut RerunForwarder,
+    p_camera: *const c_char,
     p_channel: *const c_char,
     msg: *const zoo_msgs::msg::rmw::Detection,
 ) -> u32 {
@@ -86,10 +89,11 @@ pub extern "C" fn zoo_rs_detection_callback(
     }
 
     let client: &mut RerunForwarder = unsafe { &mut *p_client };
+    let camera = unsafe { CStr::from_ptr(p_camera) }.to_str().unwrap();
     let channel = unsafe { CStr::from_ptr(p_channel) }.to_str().unwrap();
     let msg = unsafe { &*msg };
 
-    let result = client.detection_callback(channel, msg);
+    let result = client.detection_callback(camera, channel, msg);
     match result {
         Ok(_) => ZOO_VISION_OK,
         Err(e) => {

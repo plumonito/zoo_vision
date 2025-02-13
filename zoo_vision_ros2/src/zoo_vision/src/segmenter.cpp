@@ -38,33 +38,52 @@ using json = nlohmann::json;
 namespace zoo {
 
 Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", options) {
-  const auto cameraDir = getDataPath().parent_path() / "models/camera0";
+  const auto cameraName = "Kamera 01";
 
-  // Load camera calibration
-  {
-    std::ifstream f(cameraDir / "calib.json");
-    json data = json::parse(f);
-    H_worldFromCamera_ = data["H_worldFromCamera"];
-  }
-  std::cout << "H: " << H_worldFromCamera_ << std::endl;
+  // Load config
+  const auto config = [] {
+    std::ifstream f(getDataPath() / "config.json");
+    json config = json::parse(f);
+    return config;
+  }();
+
+  // Camera calibration
+  H_mapFromWorld2_ = config["map"]["T_map_from_world2"];
+  H_world2FromCamera_ = config["cameras"][cameraName]["H_world2_from_camera"];
+  // std::cout << "H_world2FromCamera_: " << H_world2FromCamera_ << std::endl;
 
   // Load model
   {
-    const auto modelDir = getDataPath().parent_path() / "models";
-    const std::string modelPath = modelDir / "maskrcnn_trained.ptc";
+    const std::filesystem::path modelPath =
+        std::filesystem::canonical(getDataPath() / config["models"]["segmentation"]);
+    RCLCPP_INFO(get_logger(), "Loading segmentation model from %s", modelPath.c_str());
 
-    model_ = torch::jit::load(modelPath, torch::kCUDA);
+    try {
+      if (!std::filesystem::exists(modelPath)) {
+        throw std::runtime_error("Model does not exist");
+      }
+      model_ = torch::jit::load(modelPath, torch::kCUDA);
+      // auto modelCpu = torch::jit::load(modelPath, torch::kCUDA);
+      // model_ = modelCpu.to(torch::kCUDA);
+    } catch (const std::exception &ex) {
+      std::cout << "Error loading model from " << modelPath << std::endl;
+      std::cout << "Exception: " << ex.what() << std::endl;
+      std::terminate();
+    }
     // DEBUG print model info
   }
 
   // Subscribe to receive images from camera
+  const auto cameraTopic = topicFromCameraName(cameraName);
+  const auto imageTopic = cameraTopic + "/image";
+  const auto detectionsTopic = cameraTopic + "/detections";
+  const auto detectionsImageTopic = cameraTopic + "/detections/image";
   imageSubscriber_ = rclcpp::create_subscription<zoo_msgs::msg::Image12m>(
-      *this, "input_camera/image", 10, [this](const zoo_msgs::msg::Image12m &msg) { this->onImage(msg); });
+      *this, imageTopic, 10, [this](const zoo_msgs::msg::Image12m &msg) { this->onImage(msg); });
 
   // Publish detections
-  detectionImagePublisher_ =
-      rclcpp::create_publisher<zoo_msgs::msg::Image12m>(*this, "input_camera/detections/image", 10);
-  detectionPublisher_ = rclcpp::create_publisher<zoo_msgs::msg::Detection>(*this, "input_camera/detections", 10);
+  detectionImagePublisher_ = rclcpp::create_publisher<zoo_msgs::msg::Image12m>(*this, detectionsImageTopic, 10);
+  detectionPublisher_ = rclcpp::create_publisher<zoo_msgs::msg::Detection>(*this, detectionsTopic, 10);
 }
 
 void Segmenter::loadModel() {}
@@ -171,8 +190,8 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
     // Project to world
     const Eigen::Vector2f imagePosition = (center + Eigen::Vector2f{0, halfSize[1]}) * resizeFactor;
 
-    const Eigen::Vector3f worldPosition =
-        (H_worldFromCamera_ * imagePosition.homogeneous()).hnormalized().homogeneous();
+    const Eigen::Matrix3f H_mapFromCamera = H_mapFromWorld2_ * H_world2FromCamera_;
+    const Eigen::Vector3f worldPosition = (H_mapFromCamera * imagePosition.homogeneous()).hnormalized().homogeneous();
     worldPositionsMap.col(outIndex) = worldPosition;
 
     outIndex += 1;

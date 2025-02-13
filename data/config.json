@@ -19,6 +19,10 @@
       ]
     ]
   },
+  "models": {
+    "segmentation2": "../models/camera0/segmentation/torch.pt",
+    "segmentation": "../models/maskrcnn_trained.ptc"
+  },
   "cameras": {
     "Kamera 01": {
       "sample_image": "cameras/Kamera 01/ELP-Kamera-01-20240907-185521-1725728121288-7_00000000_img.jpg",

@@ -17,14 +17,17 @@
 #include "zoo_vision/utils.hpp"
 
 #include <cv_bridge/cv_bridge.hpp>
+#include <nlohmann/json.hpp>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <rclcpp/time.hpp>
 
 #include <chrono>
 #include <format>
+#include <fstream>
 
 using namespace std::chrono_literals;
+using json = nlohmann::json;
 
 using CImage12m = zoo_msgs::msg::Image12m;
 using CImage4m = zoo_msgs::msg::Image4m;
@@ -32,8 +35,10 @@ using CDetection = zoo_msgs::msg::Detection;
 extern "C" {
 extern uint32_t zoo_rs_init(void **zoo_rs_handle, char const *const data_path);
 extern uint32_t zoo_rs_test_me(void *zoo_rs_handle, char const *const frame_id);
-extern uint32_t zoo_rs_image_callback(void *zoo_rs_handle, char const *const channel, const CImage12m *);
-extern uint32_t zoo_rs_detection_callback(void *zoo_rs_handle, char const *const channel, const CDetection *);
+extern uint32_t zoo_rs_image_callback(void *zoo_rs_handle, char const *const cameraTopic, char const *const channel,
+                                      const CImage12m *);
+extern uint32_t zoo_rs_detection_callback(void *zoo_rs_handle, char const *const cameraTopic, char const *const channel,
+                                          const CDetection *);
 }
 namespace zoo {
 
@@ -46,34 +51,71 @@ auto timeFromRosTime(const builtin_interfaces::msg::Time &stamp) {
 RerunForwarder::RerunForwarder(const rclcpp::NodeOptions &options)
     : Node("rerun_forwarder", options) /*, rerunStream_("zoo_vision")*/ {
 
-  auto subscribeImage = [&](const char *const channel) {
-    imageSubscribers_.push_back(rclcpp::create_subscription<zoo_msgs::msg::Image12m>(
-        *this, channel, 10, [this, channel](const zoo_msgs::msg::Image12m &msg) { this->onImage(channel, msg); }));
-  };
-  // subscribeImage("input_camera/image");
-  subscribeImage("input_camera/detections/image");
-  RCLCPP_INFO(get_logger(), "Image subscriber can loan messages: %d", imageSubscribers_[0]->can_loan_messages());
+  // Load config
+  std::vector<std::string> cameraNames;
+  {
+    std::ifstream f(getDataPath() / "config.json");
+    json data = json::parse(f);
+    for (auto &item : data["cameras"].items()) {
+      cameraNames.push_back(item.key());
+    }
+  }
+  {
+    std::string cameraNamesDescr;
+    {
+      for (const auto &name : cameraNames) {
+        if (!cameraNamesDescr.empty()) {
+          cameraNamesDescr.append(", ");
+        }
+        cameraNamesDescr.append(name);
+      }
+      cameraNamesDescr = "[" + cameraNamesDescr + "]";
+    }
+    RCLCPP_INFO(get_logger(), "Configured cameras=%s", cameraNamesDescr.c_str());
+  }
 
-  auto subscribeDetection = [&](const char *const channel) {
-    detectionSubscribers_.push_back(rclcpp::create_subscription<zoo_msgs::msg::Detection>(
-        *this, channel, 10, [this, channel](const zoo_msgs::msg::Detection &msg) { this->onDetection(channel, msg); }));
+  auto subscribeImage = [&](std::string cameraTopic, std::string channel) {
+    auto subscription = rclcpp::create_subscription<zoo_msgs::msg::Image12m>(
+        *this, channel, 10,
+        [this, cameraTopic, channel](const zoo_msgs::msg::Image12m &msg) { this->onImage(cameraTopic, channel, msg); });
+    RCLCPP_INFO(get_logger(), "Subscribed to detection image %s (loans=%d)", channel.c_str(),
+                subscription->can_loan_messages());
+    imageSubscribers_.push_back(std::move(subscription));
   };
-  subscribeDetection("input_camera/detections");
+
+  auto subscribeDetection = [&](std::string cameraTopic, std::string channel) {
+    auto subscription = rclcpp::create_subscription<zoo_msgs::msg::Detection>(
+        *this, channel, 10, [this, cameraTopic, channel](const zoo_msgs::msg::Detection &msg) {
+          this->onDetection(cameraTopic, channel, msg);
+        });
+    RCLCPP_INFO(get_logger(), "Subscribed to detection results %s (loans=%d)", channel.c_str(),
+                subscription->can_loan_messages());
+    detectionSubscribers_.push_back(std::move(subscription));
+  };
+
+  // Subscribe to all cameras
+  for (const auto &name : cameraNames) {
+    const auto topic = topicFromCameraName(name);
+    subscribeImage(topic, topic + "/detections/image");
+    subscribeDetection(topic, topic + "/detections");
+  }
 
   zoo_rs_init(&rsHandle_, getDataPath().c_str());
 }
 
-void RerunForwarder::onImage(const char *const channel, const zoo_msgs::msg::Image12m &msg) {
+void RerunForwarder::onImage(const std::string &cameraTopic, const std::string &channel,
+                             const zoo_msgs::msg::Image12m &msg) {
   // auto frame_id = reinterpret_cast<const char *>(&msg.header.frame_id.data);
   // RCLCPP_INFO(get_logger(), "Received img (id=%s)", frame_id);
-  zoo_rs_image_callback(rsHandle_, channel, &msg);
+  zoo_rs_image_callback(rsHandle_, cameraTopic.c_str(), channel.c_str(), &msg);
 }
 
-void RerunForwarder::onDetection(const char *const channel, const zoo_msgs::msg::Detection &msg) {
+void RerunForwarder::onDetection(const std::string &cameraTopic, const std::string &channel,
+                                 const zoo_msgs::msg::Detection &msg) {
   // auto frame_id = reinterpret_cast<const char *>(&msg.header.frame_id.data);
   // RCLCPP_INFO(get_logger(), "Received img (id=%s)", frame_id);
   // zoo_rs_test_me(rsHandle_, frame_id);
-  zoo_rs_detection_callback(rsHandle_, channel, &msg);
+  zoo_rs_detection_callback(rsHandle_, cameraTopic.c_str(), channel.c_str(), &msg);
 }
 
 } // namespace zoo

@@ -22,11 +22,23 @@ impl RerunForwarder {
             Default::default(),
             Default::default(),
             rerun::MemoryLimit::from_bytes(1024 * 1024 * 1024),
-            false,
+            true,
         )?;
 
+        // Load config
+        let file =
+            std::fs::File::open(data_path.join("config.json")).expect("Config json file not found");
+        let reader = std::io::BufReader::new(file);
+        let config: serde_json::Value =
+            serde_json::from_reader(reader).expect("Config json not valid");
+        let map_filename = config["map"]["image"]
+            .as_str()
+            .expect("map image not set in config");
+
         // Load floor plan
-        let world_image = image::ImageReader::open(data_path.join("floor_plan.png"))?.decode()?;
+        let map_path = data_path.join(map_filename);
+        println!("Map filename={}", map_path.to_str().unwrap());
+        let world_image = image::ImageReader::open(map_path)?.decode()?;
         let world_image_rr = rerun::Image::from_dynamic_image(world_image)?;
         recording.log_static("world/floor_plan", &world_image_rr)?;
 
@@ -59,6 +71,7 @@ impl RerunForwarder {
 
     pub fn image_callback(
         &mut self,
+        _camera: &str,
         channel: &str,
         msg: &zoo_msgs::msg::rmw::Image12m,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -102,6 +115,7 @@ impl RerunForwarder {
 
     pub fn detection_callback(
         &mut self,
+        camera: &str,
         channel: &str,
         msg: &zoo_msgs::msg::rmw::Detection,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -144,7 +158,7 @@ impl RerunForwarder {
         let world_points_rr =
             rerun::Points2D::new(world_positions.axis_iter(Axis(0)).map(|x| (x[0], x[1])));
         self.recording.log(
-            "world/input_camera/detections/positions",
+            "world/".to_owned() + camera + "/detections/positions",
             &world_points_rr.with_class_ids(ids).with_radii([20.0]),
         )?;
 

@@ -22,8 +22,8 @@ class RerunForwarder : public rclcpp::Node {
 public:
   explicit RerunForwarder(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
 
-  void onImage(const char *const channel, const zoo_msgs::msg::Image12m &msg);
-  void onDetection(const char *const channel, const zoo_msgs::msg::Detection &msg);
+  void onImage(const std::string &cameraTopic,const std::string &channel, const zoo_msgs::msg::Image12m &msg);
+  void onDetection(const std::string &cameraTopic,const std::string &channel, const zoo_msgs::msg::Detection &msg);
 
   void *rsHandle_;
   std::vector<std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>>> imageSubscribers_;

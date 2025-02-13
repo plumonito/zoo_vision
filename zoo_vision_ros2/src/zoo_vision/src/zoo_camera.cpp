@@ -47,7 +47,7 @@ ZooCamera::ZooCamera(const rclcpp::NodeOptions &options) : Node("input_camera", 
   assert(frameHeight_ * frameWidth_ * 3 <= zoo_msgs::msg::Image12m::DATA_MAX_SIZE);
   frameIndex_ = 0;
 
-  publisher_ = rclcpp::create_publisher<zoo_msgs::msg::Image12m>(*this, "input_camera/image", 10);
+  publisher_ = rclcpp::create_publisher<zoo_msgs::msg::Image12m>(*this, "kamera_01/image", 10);
   timer_ = create_wall_timer(30ms, [this]() { this->onTimer(); });
 }
 
