@@ -15,6 +15,7 @@
 #include "zoo_msgs/msg/detection.hpp"
 #include "zoo_msgs/msg/image12m.hpp"
 #include "zoo_msgs/msg/image4m.hpp"
+#include "zoo_vision/timings.hpp"
 
 #include <Eigen/Dense>
 #include <rclcpp/rclcpp.hpp>
@@ -32,6 +33,7 @@ public:
   void onImage(const zoo_msgs::msg::Image12m &msg);
 
 private:
+  RateSampler rateSampler_;
   Eigen::Matrix3f H_world2FromCamera_;
   Eigen::Matrix3f H_mapFromWorld2_;
   torch::jit::script::Module model_;

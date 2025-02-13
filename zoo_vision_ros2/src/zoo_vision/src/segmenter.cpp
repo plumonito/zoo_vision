@@ -89,6 +89,8 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", opt
 void Segmenter::loadModel() {}
 
 void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
+  TimedSection timer;
+
   // Allocate detection message so we can already start putting things here
   auto detectionMsg = std::make_unique<zoo_msgs::msg::Detection>();
   detectionMsg->header = imageMsg.header;
@@ -198,6 +200,7 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
   }
   detectionMsg->detection_count = outIndex;
   detectionMsg->masks.sizes[0] = outIndex;
+  detectionMsg->processing_time_ns = timer.time().count();
 
   detectionPublisher_->publish(std::move(detectionMsg));
 }

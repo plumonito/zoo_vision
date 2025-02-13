@@ -7,12 +7,13 @@ use rerun::{
 };
 use std::{io::Cursor, path::Path};
 
-pub struct RerunForwarder {
-    recording: rerun::RecordingStream,
-}
-
 fn nanosec_from_ros(stamp: &builtin_interfaces::msg::rmw::Time) -> i64 {
     1e9 as i64 * stamp.sec as i64 + stamp.nanosec as i64
+}
+
+pub struct RerunForwarder {
+    recording: rerun::RecordingStream,
+    first_ros_time_ns: Option<i64>,
 }
 
 impl RerunForwarder {
@@ -51,7 +52,10 @@ impl RerunForwarder {
             )]),
         )?;
 
-        Ok(Self { recording })
+        Ok(Self {
+            recording,
+            first_ros_time_ns: None,
+        })
     }
 
     pub fn test_me(&mut self, frame_id: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -70,8 +74,8 @@ impl RerunForwarder {
 
     pub fn image_callback(
         &mut self,
-        _camera: &str,
-        channel: &str,
+        camera: &str,
+        _channel: &str,
         msg: &zoo_msgs::msg::rmw::Image12m,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let msg_data_slice = unsafe {
@@ -93,8 +97,10 @@ impl RerunForwarder {
 
         let time_ns = nanosec_from_ros(&msg.header.stamp);
         self.recording.set_time_nanos("ros_time", time_ns);
-        self.recording
-            .log(channel, &rr_image.with_draw_order(-1.0))?;
+        self.recording.log(
+            format!("/cameras/{}", camera),
+            &rr_image.with_draw_order(-1.0),
+        )?;
 
         // Clear out detections
         // self.recording.set_time_nanos("ros_time", time_ns - 1);
@@ -115,18 +121,30 @@ impl RerunForwarder {
     pub fn detection_callback(
         &mut self,
         camera: &str,
-        channel: &str,
+        _channel: &str,
         msg: &zoo_msgs::msg::rmw::Detection,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // // println!("Test from forwarder, mask id={}", unsafe {
-        //     std::str::from_utf8_unchecked(msg.header.frame_id.data.as_slice())
-        // });
-        let detection_count = msg.detection_count as usize;
+        let ros_time_ns = nanosec_from_ros(&msg.header.stamp);
+        const DROP_SAMPLE_DURATION: i64 = 2 * 1e9 as i64;
+        if DROP_SAMPLE_DURATION > 0 {
+            match self.first_ros_time_ns {
+                Some(t) => {
+                    if ros_time_ns < t {
+                        return Ok(());
+                    }
+                }
+                None => {
+                    self.first_ros_time_ns = Some(ros_time_ns + DROP_SAMPLE_DURATION);
+                    return Ok(());
+                }
+            }
+        }
 
         // Set rerun time
         self.recording
-            .set_time_nanos("ros_time", nanosec_from_ros(&msg.header.stamp));
+            .set_time_nanos("ros_time", ros_time_ns as i64);
 
+        let detection_count = msg.detection_count as usize;
         let ids: Vec<_> = (1..(detection_count + 1) as u16).collect();
 
         // Map message data to image array
@@ -148,7 +166,7 @@ impl RerunForwarder {
         let bbox_centers = (0..detection_count).map(|x| msg.bboxes[x].center);
         let bbox_half_sizes = (0..detection_count).map(|x| msg.bboxes[x].half_size);
         self.recording.log(
-            format!("{}/boxes", channel),
+            format!("/cameras/{}/boxes", camera),
             &rerun::Boxes2D::from_centers_and_half_sizes(bbox_centers, bbox_half_sizes)
                 .with_class_ids(ids.clone()),
         )?;
@@ -157,7 +175,7 @@ impl RerunForwarder {
         let world_points_rr =
             rerun::Points2D::new(world_positions.axis_iter(Axis(0)).map(|x| (x[0], x[1])));
         self.recording.log(
-            "world/".to_owned() + camera + "/detections/positions",
+            format!("/world/{}/positions", camera),
             &world_points_rr.with_class_ids(ids).with_radii([20.0]),
         )?;
 
@@ -175,8 +193,15 @@ impl RerunForwarder {
         }
         let rr_image = rerun::SegmentationImage::try_from(image_classes)?;
         self.recording.log(
-            format!("{}/masks", channel),
+            format!("/cameras/{}/masks", camera),
             &rr_image.with_draw_order(1.0).with_opacity(0.7),
+        )?;
+
+        // Log processing time
+        let processing_time = std::time::Duration::from_nanos(msg.processing_time_ns);
+        self.recording.log(
+            format!("/processing_times/{}_segmentation", camera),
+            &rerun::Scalar::new(processing_time.as_secs_f64()),
         )?;
 
         Ok(())
