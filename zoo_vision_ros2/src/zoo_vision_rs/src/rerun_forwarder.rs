@@ -22,7 +22,7 @@ impl RerunForwarder {
             Default::default(),
             Default::default(),
             rerun::MemoryLimit::from_bytes(1024 * 1024 * 1024),
-            true,
+            false,
         )?;
 
         // Load config
@@ -38,8 +38,7 @@ impl RerunForwarder {
         // Load floor plan
         let map_path = data_path.join(map_filename);
         println!("Map filename={}", map_path.to_str().unwrap());
-        let world_image = image::ImageReader::open(map_path)?.decode()?;
-        let world_image_rr = rerun::Image::from_dynamic_image(world_image)?;
+        let world_image_rr = rerun::EncodedImage::from_file(map_path)?;
         recording.log_static("world/floor_plan", &world_image_rr)?;
 
         // Log an annotation context to assign a label and color to each class
