@@ -37,6 +37,7 @@ class IModelEvaluator(ABC, Generic[TModel]):
 def optimizeModel(
     evaluator: IModelEvaluator[TModel], model0: TModel, debug=False
 ) -> TModel:
+    cost0 = evaluator.evaluateModel(model0)
     params0 = evaluator.model2params(model0)
     res = scipy.optimize.minimize(
         evaluator, params0, bounds=evaluator.getParamBounds(), options={"disp": debug}
@@ -44,4 +45,8 @@ def optimizeModel(
     if debug:
         print(res)
     model = evaluator.params2model(res.x)
+    cost = evaluator.evaluateModel(model)
+
+    print(f"Optimization cost: start={cost0}, delta={cost-cost0}")
+
     return model
