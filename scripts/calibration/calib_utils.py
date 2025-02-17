@@ -37,6 +37,12 @@ def hmult(A, b, keep_h=False):
         return Abh
 
 
+def K_from_fov(fov, center, width):
+    fx = width / np.tan(fov / 2)
+    K = np.array([[fx, 0, center[0]], [0, fx, center[1]], [0, 0, 1]])
+    return K
+
+
 def test_hfuncs():
     print("Homogenous utilities tests")
     a2 = np.array([[0, 0], [1, 1], [2, 2], [3, 3]])
@@ -45,3 +51,139 @@ def test_hfuncs():
     A = np.eye(3)
     hmult(A, np.ones((2,)))
     hmult(A, np.ones((10, 2)))
+
+
+def plot_projections_generic(
+    H_camera_from_world2: np.ndarray,
+    T_submap_from_world2: np.ndarray,
+    im_submap: np.ndarray,
+    im_camera: np.ndarray,
+    points_in_image: np.ndarray,
+    points_in_world2: np.ndarray,
+    floor_polygon_in_camera: np.ndarray,
+    undistort=lambda x: x,
+    distort=lambda x: x,
+):
+    H_world2_from_camera = np.linalg.inv(H_camera_from_world2)
+    H_submap_from_camera = T_submap_from_world2 @ H_world2_from_camera
+
+    floor_polygon_in_submap = hmult(
+        H_submap_from_camera, undistort(floor_polygon_in_camera)
+    )
+    submap_points = hmult(T_submap_from_world2, points_in_world2)
+    camera_points_exp = distort(hmult(H_camera_from_world2, points_in_world2))
+    world2_points_exp = hmult(H_world2_from_camera, undistort(points_in_image))
+    submap_points_exp = hmult(T_submap_from_world2, points_in_world2)
+
+    errors = np.linalg.norm(submap_points - submap_points_exp, axis=1)
+    print(
+        f"Error (submap units): mean={np.mean(errors)}, max={np.max(errors)}, sum={np.sum(errors)}"
+    )
+
+    errors = np.linalg.norm(points_in_world2 - world2_points_exp, axis=1)
+    print(
+        f"Error (world units): mean={np.mean(errors)}, max={np.max(errors)}, sum={np.sum(errors)}"
+    )
+
+    errors = np.linalg.norm(points_in_image - points_in_image, axis=1)
+    print(
+        f"Error (camera units): mean={np.mean(errors)}, max={np.max(errors)}, sum={np.sum(errors)}"
+    )
+
+    fig, axs = plt.subplots(1, 2, figsize=(20, 15))
+    axs[0].imshow(im_submap)
+    axs[1].imshow(im_camera)
+    ax = axs[0]
+    ax.plot(
+        floor_polygon_in_submap[:, 0],
+        floor_polygon_in_submap[:, 1],
+        "-",
+        color="purple",
+    )
+    ax = axs[1]
+    ax.plot(
+        floor_polygon_in_camera[:, 0],
+        floor_polygon_in_camera[:, 1],
+        "-",
+        color="lightgreen",
+    )
+    for i in range(points_in_image.shape[0]):
+        ax = axs[0]
+        ax.plot(
+            submap_points[i, 0],
+            submap_points[i, 1],
+            "*",
+            markersize=20,
+            color="lightgreen",
+            alpha=0.5,
+        )
+        ax.plot(
+            submap_points_exp[i, 0],
+            submap_points_exp[i, 1],
+            "+",
+            markersize=20,
+            color="red",
+            alpha=0.5,
+        )
+
+        ax = axs[1]
+        ax.plot(
+            points_in_image[i, 0],
+            points_in_image[i, 1],
+            "*",
+            markersize=20,
+            color="lightgreen",
+            alpha=0.5,
+        )
+        ax.plot(
+            camera_points_exp[i, 0],
+            camera_points_exp[i, 1],
+            "+",
+            markersize=20,
+            color="red",
+            alpha=0.5,
+        )
+
+    fig.tight_layout()
+    return axs
+
+
+def plot_camera(
+    ax,
+    unproject_points,
+    camera_position_in_world,
+    width=int,
+    height=int,
+    scale=1,
+    T_axes_from_world2: np.ndarray = np.eye(3),
+):
+    center = hmult(T_axes_from_world2, camera_position_in_world[0:2])
+    h, w = height, width
+
+    N = 10
+    u = np.linspace(0, w - 1, N)
+    v = np.linspace(0, h - 1, N)
+    uv, vv = np.meshgrid(u, v)
+    grid_shape = uv.shape
+    points_image = np.stack([uv.reshape(-1), vv.reshape(-1)], axis=1)
+
+    xyz = unproject_points(points_image, scale)
+
+    # Drop z
+    xy = xyz[:, 0:2]
+
+    xy = hmult(T_axes_from_world2, xy)
+
+    # Back to grid
+    xv = xy[:, 0].reshape(grid_shape)
+    yv = xy[:, 1].reshape(grid_shape)
+
+    ax.plot([center[0]], [center[1]], "*")
+    for i, j in [(0, 0), (0, -1), (-1, -1), (-1, 0)]:
+        ax.plot([center[0], xv[i, j]], [center[1], yv[i, j]], "-", color="gray")
+    # Rows
+    for i in range(xv.shape[0]):
+        ax.plot(xv[i, :], yv[i, :], "-", color="black")
+    # Cols
+    for i in range(xv.shape[1]):
+        ax.plot(xv[:, i], yv[:, i], "-", color="black")
