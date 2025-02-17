@@ -1,4 +1,4 @@
-Kamera 01:
+elp_kamera_01:
   camera_position_in_world:
   - -101.31439363153284
   - 54.64604847076174
@@ -112,7 +112,7 @@ Kamera 01:
     - 1500
   - - 1912
     - 3164
-ZAG-ELP-CAM-017:
+zag_elp_cam_017:
   camera_position_in_world:
   - -49.75289607103973
   - 58.59613459748977

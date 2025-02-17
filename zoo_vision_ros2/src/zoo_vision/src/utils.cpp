@@ -80,19 +80,10 @@ void copyMat1bToMsg(const cv::Mat1b &img, zoo_msgs::msg::Image4m &msg) {
 }
 
 at::Tensor mapRosTensor(zoo_msgs::msg::Tensor3b32m &rosTensor) {
+  const size_t totalSize = rosTensor.sizes[0] * rosTensor.sizes[1] * rosTensor.sizes[2];
+  ASSERT_DEBUG(totalSize <= zoo_msgs::msg::Tensor3b32m::DATA_MAX_SIZE);
   return at::from_blob(rosTensor.data.data(), {rosTensor.sizes[0], rosTensor.sizes[1], rosTensor.sizes[2]},
                        at::TensorOptions().dtype(at::kByte));
 }
 
-std::string topicFromCameraName(std::string_view name) {
-  std::string topic{name};
-  for (auto &c : topic) {
-    if (c == ' ') {
-      c = '_';
-    } else {
-      c = std::tolower(c);
-    }
-  }
-  return topic;
-}
 } // namespace zoo

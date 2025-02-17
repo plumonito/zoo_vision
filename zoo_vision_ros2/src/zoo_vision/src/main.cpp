@@ -20,18 +20,30 @@
 
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::executors::MultiThreadedExecutor exec{rclcpp::ExecutorOptions(), 3};
+
+  std::vector<std::string> cameraNames = {"elp_kamera_01", "zag_elp_cam_017"};
+
+  rclcpp::executors::MultiThreadedExecutor exec{rclcpp::ExecutorOptions(), cameraNames.size() + 1};
 
   rclcpp::NodeOptions options;
   options.use_intra_process_comms(true);
 
-  auto camera_node = std::make_shared<zoo::ZooCamera>(options);
-  auto segmenter = std::make_shared<zoo::Segmenter>(options);
-  auto rerun = std::make_shared<zoo::RerunForwarder>(options);
+  std::vector<std::shared_ptr<rclcpp::Node>> nodes;
 
-  exec.add_node(camera_node);
-  exec.add_node(segmenter);
-  exec.add_node(rerun);
+  for (const auto &cameraName : cameraNames) {
+    rclcpp::NodeOptions optionsCamera = options;
+    optionsCamera.append_parameter_override("camera_name", cameraName);
+
+    nodes.push_back(std::make_shared<zoo::ZooCamera>(optionsCamera));
+    nodes.push_back(std::make_shared<zoo::Segmenter>(optionsCamera));
+  }
+
+  nodes.push_back(std::make_shared<zoo::RerunForwarder>(options));
+
+  for (const auto &node : nodes) {
+    exec.add_node(node);
+  }
+
   exec.spin();
   rclcpp::shutdown();
   return 0;

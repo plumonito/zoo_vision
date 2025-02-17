@@ -32,8 +32,10 @@ const std::string DEFAULT_VIDEO_NAME = "sample_video.mp4";
 namespace zoo {
 
 ZooCamera::ZooCamera(const rclcpp::NodeOptions &options) : Node("input_camera", options) {
-  // videoUrl_ = declare_parameter<std::string>("videoUrl", getDataPath() / DEFAULT_VIDEO_NAME);
-  videoUrl_ = "/home/dherrera/data/elephants/new_elephant_data/Kamera 01/20240907PM/trim.mp4";
+  this->cameraName_ = declare_parameter<std::string>("camera_name");
+  RCLCPP_INFO(get_logger(), "Starting zoo_camera for %s", cameraName_.c_str());
+
+  videoUrl_ = getDataPath() / "cameras" / cameraName_ / "sample.mp4";
 
   bool ok = cvStream_.open(videoUrl_);
   if (ok) {
@@ -47,7 +49,7 @@ ZooCamera::ZooCamera(const rclcpp::NodeOptions &options) : Node("input_camera", 
   assert(frameHeight_ * frameWidth_ * 3 <= zoo_msgs::msg::Image12m::DATA_MAX_SIZE);
   frameIndex_ = 0;
 
-  publisher_ = rclcpp::create_publisher<zoo_msgs::msg::Image12m>(*this, "kamera_01/image", 10);
+  publisher_ = rclcpp::create_publisher<zoo_msgs::msg::Image12m>(*this, cameraName_ + "/image", 10);
   timer_ = create_wall_timer(30ms, [this]() { this->onTimer(); });
 }
 

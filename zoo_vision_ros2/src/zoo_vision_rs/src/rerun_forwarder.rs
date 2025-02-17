@@ -14,6 +14,7 @@ fn nanosec_from_ros(stamp: &builtin_interfaces::msg::rmw::Time) -> i64 {
 pub struct RerunForwarder {
     recording: rerun::RecordingStream,
     first_ros_time_ns: Option<i64>,
+    // camera_indices: HashMap<String, usize>,
 }
 
 impl RerunForwarder {
@@ -42,6 +43,18 @@ impl RerunForwarder {
         let world_image_rr = rerun::EncodedImage::from_file(map_path)?;
         recording.log_static("world/floor_plan", &world_image_rr)?;
 
+        // Store a list of cameras
+        const COLUMN_COUNT: u32 = 4;
+        // let foo = vec!["elp_kamera_01", "zag_elp_cam_017"];
+        // for (index, camera_name) in foo.iter().enumerate() {
+        for (index, (camera_name, _)) in config["cameras"].as_object().unwrap().iter().enumerate() {
+            let row = index as u32 / COLUMN_COUNT;
+            let col = index as u32 % COLUMN_COUNT;
+
+            let tf = rerun::Transform3D::from_translation([row as f32, col as f32, 0.0]);
+            recording.log_static(format!("/cameras/{}", camera_name), &tf)?;
+        }
+
         // Log an annotation context to assign a label and color to each class
         recording.log_static(
             "/",
@@ -55,6 +68,7 @@ impl RerunForwarder {
         Ok(Self {
             recording,
             first_ros_time_ns: None,
+            // camera_indices: HashMap::new(),
         })
     }
 
@@ -97,8 +111,19 @@ impl RerunForwarder {
 
         let time_ns = nanosec_from_ros(&msg.header.stamp);
         self.recording.set_time_nanos("ros_time", time_ns);
+
+        let largest_side = if image.width() > image.height() {
+            image.width()
+        } else {
+            image.height()
+        };
+        let scale = 1.0 / largest_side as f32;
         self.recording.log(
-            format!("/cameras/{}", camera),
+            format!("/cameras/{}/detections", camera),
+            &rerun::Transform3D::from_scale(scale),
+        )?;
+        self.recording.log(
+            format!("/cameras/{}/detections", camera),
             &rr_image.with_draw_order(-1.0),
         )?;
 
@@ -166,7 +191,7 @@ impl RerunForwarder {
         let bbox_centers = (0..detection_count).map(|x| msg.bboxes[x].center);
         let bbox_half_sizes = (0..detection_count).map(|x| msg.bboxes[x].half_size);
         self.recording.log(
-            format!("/cameras/{}/boxes", camera),
+            format!("/cameras/{}/detections/boxes", camera),
             &rerun::Boxes2D::from_centers_and_half_sizes(bbox_centers, bbox_half_sizes)
                 .with_class_ids(ids.clone()),
         )?;
@@ -175,7 +200,7 @@ impl RerunForwarder {
         let world_points_rr =
             rerun::Points2D::new(world_positions.axis_iter(Axis(0)).map(|x| (x[0], x[1])));
         self.recording.log(
-            format!("/world/{}/positions", camera),
+            format!("/world/{}/detections/positions", camera),
             &world_points_rr.with_class_ids(ids).with_radii([20.0]),
         )?;
 
@@ -193,7 +218,7 @@ impl RerunForwarder {
         }
         let rr_image = rerun::SegmentationImage::try_from(image_classes)?;
         self.recording.log(
-            format!("/cameras/{}/masks", camera),
+            format!("/cameras/{}/detections/masks", camera),
             &rr_image.with_draw_order(1.0).with_opacity(0.7),
         )?;
 
@@ -201,7 +226,7 @@ impl RerunForwarder {
         let processing_time = std::time::Duration::from_nanos(msg.processing_time_ns);
         self.recording.log(
             format!("/processing_times/{}_segmentation", camera),
-            &rerun::Scalar::new(processing_time.as_secs_f64()),
+            &rerun::Scalar::new(processing_time.as_secs_f64() * 1000.0),
         )?;
 
         Ok(())

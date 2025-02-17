@@ -26,6 +26,7 @@ public:
   explicit ZooCamera(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
   void onTimer();
 
+  std::string cameraName_;
   std::string videoUrl_;
   cv::VideoCapture cvStream_;
   uint32_t frameWidth_;

@@ -38,7 +38,8 @@ using json = nlohmann::json;
 namespace zoo {
 
 Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", options) {
-  const auto cameraName = "Kamera 01";
+  const std::string cameraName = declare_parameter<std::string>("camera_name");
+  RCLCPP_INFO(get_logger(), "Starting segmenter for %s", cameraName.c_str());
 
   // Load config
   const auto config = [] {
@@ -74,10 +75,9 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", opt
   }
 
   // Subscribe to receive images from camera
-  const auto cameraTopic = topicFromCameraName(cameraName);
-  const auto imageTopic = cameraTopic + "/image";
-  const auto detectionsTopic = cameraTopic + "/detections";
-  const auto detectionsImageTopic = cameraTopic + "/detections/image";
+  const auto imageTopic = cameraName + "/image";
+  const auto detectionsTopic = cameraName + "/detections";
+  const auto detectionsImageTopic = cameraName + "/detections/image";
   imageSubscriber_ = rclcpp::create_subscription<zoo_msgs::msg::Image12m>(
       *this, imageTopic, 10, [this](const zoo_msgs::msg::Image12m &msg) { this->onImage(msg); });
 

@@ -24,7 +24,7 @@
     "segmentation": "../models/maskrcnn_trained.ptc"
   },
   "cameras": {
-    "Kamera 01": {
+    "elp_kamera_01": {
       "sample_image": "cameras/Kamera 01/ELP-Kamera-01-20240907-185521-1725728121288-7_00000000_img.jpg",
       "intrinsics": {
         "width": 1920,
@@ -99,7 +99,7 @@
         ]
       ]
     },
-    "ZAG-ELP-CAM-017": {
+    "zag_elp_cam_017": {
       "sample_image": "cameras/ZAG-ELP-CAM-017/ZAG-ELP-CAM-017_sample.jpg",
       "intrinsics": {
         "width": 2688,

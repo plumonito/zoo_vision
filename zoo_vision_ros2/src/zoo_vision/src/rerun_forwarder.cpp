@@ -95,9 +95,8 @@ RerunForwarder::RerunForwarder(const rclcpp::NodeOptions &options)
 
   // Subscribe to all cameras
   for (const auto &name : cameraNames) {
-    const auto topic = topicFromCameraName(name);
-    subscribeImage(topic, topic + "/detections/image");
-    subscribeDetection(topic, topic + "/detections");
+    subscribeImage(name, name + "/detections/image");
+    subscribeDetection(name, name + "/detections");
   }
 
   zoo_rs_init(&rsHandle_, getDataPath().c_str());

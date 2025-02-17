@@ -177,3 +177,4 @@ build/**
 install/**
 log/**
 models
+data

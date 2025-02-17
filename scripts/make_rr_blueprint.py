@@ -12,10 +12,10 @@ def make_blueprint():
                     ]
                 ),
                 rrb.TimeSeriesView(
-                    name="Processing times (sec)",
+                    name="Processing times (msec)",
                     origin="/processing_times",
                     # Set a custom Y axis.
-                    axis_y=rrb.ScalarAxis(range=(0, 0.1), zoom_lock=True),
+                    axis_y=rrb.ScalarAxis(range=(0, 100), zoom_lock=True),
                     # Configure the legend.
                     # plot_legend=rrb.PlotLegend(visible=False),
                     # Set time different time ranges for different timelines.
