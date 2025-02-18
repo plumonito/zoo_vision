@@ -18,7 +18,10 @@
 #include "zoo_vision/utils.hpp"
 
 #include <ATen/core/List.h>
+#include <ATen/cuda/CUDAEvent.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <nlohmann/json.hpp>
+#include <nvtx3/nvtx3.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
@@ -37,9 +40,10 @@ using json = nlohmann::json;
 
 namespace zoo {
 
-Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", options) {
-  const std::string cameraName = declare_parameter<std::string>("camera_name");
-  RCLCPP_INFO(get_logger(), "Starting segmenter for %s", cameraName.c_str());
+Segmenter::Segmenter(const rclcpp::NodeOptions &options)
+    : Node("segmenter", options), cudaStream_{at::cuda::getStreamFromPool()} {
+  cameraName_ = declare_parameter<std::string>("camera_name");
+  RCLCPP_INFO(get_logger(), "Starting segmenter for %s", cameraName_.c_str());
 
   // Load config
   const auto config = [] {
@@ -50,7 +54,7 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", opt
 
   // Camera calibration
   H_mapFromWorld2_ = config["map"]["T_map_from_world2"];
-  H_world2FromCamera_ = config["cameras"][cameraName]["H_world2_from_camera"];
+  H_world2FromCamera_ = config["cameras"][cameraName_]["H_world2_from_camera"];
   // std::cout << "H_world2FromCamera_: " << H_world2FromCamera_ << std::endl;
 
   // Load model
@@ -75,9 +79,9 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", opt
   }
 
   // Subscribe to receive images from camera
-  const auto imageTopic = cameraName + "/image";
-  const auto detectionsTopic = cameraName + "/detections";
-  const auto detectionsImageTopic = cameraName + "/detections/image";
+  const auto imageTopic = cameraName_ + "/image";
+  const auto detectionsTopic = cameraName_ + "/detections";
+  const auto detectionsImageTopic = cameraName_ + "/detections/image";
   imageSubscriber_ = rclcpp::create_subscription<zoo_msgs::msg::Image12m>(
       *this, imageTopic, 10, [this](const zoo_msgs::msg::Image12m &msg) { this->onImage(msg); });
 
@@ -89,7 +93,9 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options) : Node("segmenter", opt
 void Segmenter::loadModel() {}
 
 void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
-  TimedSection timer;
+  at::cuda::CUDAStreamGuard streamGuard{cudaStream_};
+
+  at::cuda::CUDAEvent eventBeforeNetwork{cudaEventDefault}, eventAfterNetwork{cudaEventDefault};
 
   // Allocate detection message so we can already start putting things here
   auto detectionMsg = std::make_unique<zoo_msgs::msg::Detection>();
@@ -98,7 +104,6 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
   const cv::Mat3b img = wrapMat3bFromMsg(imageMsg);
   const float inputAspect = static_cast<float>(imageMsg.width) / imageMsg.height;
   const int DETECTION_HEIGHT = 600;
-
   torch::IValue detectionResult;
   {
     auto detectionImageMsg = std::make_unique<zoo_msgs::msg::Image12m>();
@@ -120,10 +125,17 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
                          torch::TensorOptions().dtype(torch::kFloat32));
 
     imageTensor = imageTensor.permute({2, 0, 1}).to(torch::kCUDA);
-    c10::List<torch::Tensor> imageList({imageTensor});
 
-    // TorchScript models require a List[IValue] as input
-    detectionResult = model_.forward({imageList});
+    c10::List<torch::Tensor> imageList({imageTensor});
+    {
+      std::string label = "network " + cameraName_;
+      nvtx3::scoped_range nvtxLabel{label};
+
+      eventBeforeNetwork.record();
+      // TorchScript models require a List[IValue] as input
+      detectionResult = model_.forward({imageList});
+      eventAfterNetwork.record();
+    }
 
     // Publish image to have it in sync with masks
     detectionImagePublisher_->publish(std::move(detectionImageMsg));
@@ -160,9 +172,11 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
   torch::Tensor masksMap = mapRosTensor(detectionMsg->masks);
 
   // Move all to cpu
-  const torch::Tensor boxesNet = boxesGpu.index({Slice(0, modelDetectionCount)}).to(torch::kCPU);
-  const torch::Tensor labels = labelsGpu.index({Slice(0, modelDetectionCount)}).to(torch::kCPU);
-  const torch::Tensor masks = masksGpu.index({Slice(0, modelDetectionCount)}).to(torch::kCPU);
+  const torch::Tensor boxesNet = boxesGpu.index({Slice(0, modelDetectionCount)}).to(torch::kCPU, true);
+  const torch::Tensor labels = labelsGpu.index({Slice(0, modelDetectionCount)}).to(torch::kCPU, true);
+  const torch::Tensor masks = masksGpu.index({Slice(0, modelDetectionCount)}).to(torch::kCPU, true);
+  cudaStreamSynchronize(cudaStream_);
+  const float networkProcessingTimeMs = eventBeforeNetwork.elapsed_time(eventAfterNetwork);
 
   Eigen::Map<Eigen::Matrix3Xf> worldPositionsMap{detectionMsg->world_positions.data(), 3, modelDetectionCount};
 
@@ -200,7 +214,7 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
   }
   detectionMsg->detection_count = outIndex;
   detectionMsg->masks.sizes[0] = outIndex;
-  detectionMsg->processing_time_ns = timer.time().count();
+  detectionMsg->processing_time_ns = networkProcessingTimeMs * 1e6f;
 
   detectionPublisher_->publish(std::move(detectionMsg));
 }

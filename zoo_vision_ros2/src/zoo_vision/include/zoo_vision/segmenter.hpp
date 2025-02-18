@@ -18,6 +18,7 @@
 #include "zoo_vision/timings.hpp"
 
 #include <Eigen/Dense>
+#include <c10/cuda/CUDAStream.h>
 #include <rclcpp/rclcpp.hpp>
 #include <torch/script.h>
 
@@ -33,6 +34,8 @@ public:
   void onImage(const zoo_msgs::msg::Image12m &msg);
 
 private:
+  std::string cameraName_;
+  at::cuda::CUDAStream cudaStream_;
   RateSampler rateSampler_;
   Eigen::Matrix3f H_world2FromCamera_;
   Eigen::Matrix3f H_mapFromWorld2_;
