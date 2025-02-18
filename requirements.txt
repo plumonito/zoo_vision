@@ -1,23 +1,36 @@
 # For use in a venv
 # see make_env.sh
 # python==3.11
+
+# Colcon cargo allows building rust packages with for ros2
 colcon-cargo
 colcon-ros-cargo
+
+# Python scientific stack
 scipy
 pandas
+statsmodels
 matplotlib
 ipykernel
 ipython
-enlighten
-statsmodels
-rerun-sdk==0.21.0
-tensorflow[with-cuda]==2.18
+
+# Machine learning
+#tensorflow[with-cuda]==2.18
 tensorboard_plugin_profile
-tf2onnx==1.16.1
+#tf2onnx==1.16.1
+pycocotools
 opencv-python
 torch
 torchvision
 lark
-git+https://github.com/plumonito/sam2 # Custom repo to allow passing images directly 
-pycocotools
 fiftyone # To browse coco datasets and predictions
+
+# Rerun is our main visualization library
+rerun-sdk==0.21.0
+
+# Labelling tool requirements
+git+https://github.com/plumonito/sam2 # Custom repo to allow passing images directly 
+pyside6 # UI components
+
+# Other
+enlighten # Progress bar
