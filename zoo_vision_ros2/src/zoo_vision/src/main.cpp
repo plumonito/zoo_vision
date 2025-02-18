@@ -21,7 +21,7 @@
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
 
-  std::vector<std::string> cameraNames = {"elp_kamera_01", "zag_elp_cam_017"};
+  std::vector<std::string> cameraNames = {"zag_elp_cam_016", "zag_elp_cam_017", "zag_elp_cam_018", "zag_elp_cam_019"};
 
   rclcpp::executors::MultiThreadedExecutor exec{rclcpp::ExecutorOptions(), cameraNames.size() + 1};
 

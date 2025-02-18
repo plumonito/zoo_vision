@@ -44,14 +44,14 @@ impl RerunForwarder {
         recording.log_static("world/floor_plan", &world_image_rr)?;
 
         // Store a list of cameras
-        const COLUMN_COUNT: u32 = 4;
-        // let foo = vec!["elp_kamera_01", "zag_elp_cam_017"];
-        // for (index, camera_name) in foo.iter().enumerate() {
+        const COLUMN_COUNT: u32 = 2;
+        const ASPECT_RATIO: f32 = 1.768421053;
         for (index, (camera_name, _)) in config["cameras"].as_object().unwrap().iter().enumerate() {
             let row = index as u32 / COLUMN_COUNT;
             let col = index as u32 % COLUMN_COUNT;
-
-            let tf = rerun::Transform3D::from_translation([row as f32, col as f32, 0.0]);
+            let x = col as f32;
+            let y = row as f32 / ASPECT_RATIO;
+            let tf = rerun::Transform3D::from_translation([x, y, 0.0]);
             recording.log_static(format!("/cameras/{}", camera_name), &tf)?;
         }
 
