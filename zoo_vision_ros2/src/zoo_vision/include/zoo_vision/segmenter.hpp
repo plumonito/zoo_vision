@@ -39,6 +39,8 @@ private:
   RateSampler rateSampler_;
   Eigen::Matrix3f H_world2FromCamera_;
   Eigen::Matrix3f H_mapFromWorld2_;
+
+  int elephant_label_id_;
   torch::jit::script::Module model_;
 
   std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>> imageSubscriber_;

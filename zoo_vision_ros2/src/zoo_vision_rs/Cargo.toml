@@ -15,7 +15,11 @@ tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "time"] 
 builtin_interfaces = "*"
 standard_paths = "*"
 image = "*"
+serde = "*"
+serde_derive = "*"
 serde_json = "*" 
+nalgebra = "*"
+
 
 [dependencies.rclrs]
 version = "0.4"

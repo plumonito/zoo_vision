@@ -1,12 +1,10 @@
+use super::zoo_config::ZooConfig;
 use anyhow::{Error, Result};
 use image;
+use nalgebra::{Matrix3, Matrix4, Vector3};
 use ndarray::prelude::*;
-use rerun::{
-    demo_util::grid,
-    external::{glam, ndarray},
-};
+use rerun::{demo_util::grid, external::glam, external::ndarray};
 use std::{io::Cursor, path::Path};
-
 fn nanosec_from_ros(stamp: &builtin_interfaces::msg::rmw::Time) -> i64 {
     1e9 as i64 * stamp.sec as i64 + stamp.nanosec as i64
 }
@@ -15,6 +13,21 @@ pub struct RerunForwarder {
     recording: rerun::RecordingStream,
     first_ros_time_ns: Option<i64>,
     // camera_indices: HashMap<String, usize>,
+}
+
+fn transform3d_from_2d(t2d: &Matrix3<f32>) -> Matrix4<f32> {
+    let mut t3d: Matrix4<f32> = nalgebra::zero();
+    for r in [0, 1] {
+        for c in [0, 1] {
+            t3d[(r, c)] = t2d[(r, c)];
+        }
+    }
+    for r in [0, 1] {
+        t3d[(r, 3)] = t2d[(r, 2)];
+    }
+    t3d[(2, 2)] = 1.0;
+    t3d[(3, 3)] = 1.0;
+    return t3d;
 }
 
 impl RerunForwarder {
@@ -31,28 +44,81 @@ impl RerunForwarder {
         let file =
             std::fs::File::open(data_path.join("config.json")).expect("Config json file not found");
         let reader = std::io::BufReader::new(file);
-        let config: serde_json::Value =
-            serde_json::from_reader(reader).expect("Config json not valid");
-        let map_filename = config["map"]["image"]
-            .as_str()
-            .expect("map image not set in config");
+        let config: ZooConfig = serde_json::from_reader(reader).expect("Config json not valid");
+
+        let t_map_from_world2 =
+            Matrix3::<f32>::from_row_slice(config.map.t_map_from_world2.as_flattened());
+        let t_map_from_world = transform3d_from_2d(&t_map_from_world2);
 
         // Load floor plan
-        let map_path = data_path.join(map_filename);
+        let map_path = data_path.join(config.map.image);
         println!("Map filename={}", map_path.to_str().unwrap());
         let world_image_rr = rerun::EncodedImage::from_file(map_path)?;
-        recording.log_static("world/floor_plan", &world_image_rr)?;
+        recording.log_static("world/map", &world_image_rr)?;
 
-        // Store a list of cameras
+        // Map projection
+        {
+            // let f = [t_map_from_world[(0, 0)], t_map_from_world[(1, 1)]];
+            // let p = [t_map_from_world[(0, 2)], t_map_from_world[(1, 2)]];
+            let resolution = [4904.0, 7663.0];
+            let f = [-1.0, -1.0];
+            recording.log_static(
+                "/world/map",
+                &rerun::Pinhole::from_focal_length_and_resolution(f, resolution)
+                    .with_image_plane_distance(1.0),
+            )?;
+        }
+        let t_world_from_map = t_map_from_world.qr().try_inverse().unwrap();
+        let r = t_world_from_map.fixed_view::<3, 3>(0, 0).clone_owned();
+        let mut t = t_world_from_map.fixed_view::<3, 1>(0, 3).clone_owned();
+        t[2] = -1.0;
+
+        recording.log_static(
+            "world/map",
+            &rerun::Transform3D::from_mat3x3(r.data.0).with_translation(t.data.0[0]),
+        )?;
+
+        // Go through config cameras
         const COLUMN_COUNT: u32 = 2;
         const ASPECT_RATIO: f32 = 1.768421053;
-        for (index, (camera_name, _)) in config["cameras"].as_object().unwrap().iter().enumerate() {
+        for (index, (camera_name, camera_config)) in config.cameras.iter().enumerate() {
+            // Log pinhole in map view
+            let resolution = [
+                camera_config.intrinsics.width as f32,
+                camera_config.intrinsics.height as f32,
+            ];
+            let f = [
+                camera_config.intrinsics.k[0][0],
+                camera_config.intrinsics.k[1][1],
+            ];
+            let p = [
+                camera_config.intrinsics.k[0][2],
+                camera_config.intrinsics.k[1][2],
+            ];
+            recording.log_static(
+                format!("/world/{}", camera_name),
+                &rerun::Pinhole::from_focal_length_and_resolution(f, resolution)
+                    .with_principal_point(p)
+                    .with_image_plane_distance(3.0),
+            )?;
+
+            let r_world_from_camera = Matrix3::<f32>::from_row_slice(
+                camera_config.t_world_from_camera.rotation.as_flattened(),
+            );
+            let t_camera_in_world =
+                Vector3::<f32>::from(camera_config.t_world_from_camera.translation);
+            recording.log_static(
+                format!("/world/{}", camera_name),
+                &rerun::Transform3D::from_mat3x3(r_world_from_camera.data.0)
+                    .with_translation(t_camera_in_world.data.0[0]),
+            )?;
+
+            // Log grid position in 2D view
             let row = index as u32 / COLUMN_COUNT;
             let col = index as u32 % COLUMN_COUNT;
-            let x = col as f32;
-            let y = row as f32 / ASPECT_RATIO;
-            let tf = rerun::Transform3D::from_translation([x, y, 0.0]);
-            recording.log_static(format!("/cameras/{}", camera_name), &tf)?;
+            let t_grid_from_image =
+                rerun::Transform3D::from_translation([col as f32, row as f32 / ASPECT_RATIO, 0.0]);
+            recording.log_static(format!("/cameras/{}", camera_name), &t_grid_from_image)?;
         }
 
         // Log an annotation context to assign a label and color to each class
@@ -191,22 +257,25 @@ impl RerunForwarder {
         let bbox_centers = (0..detection_count).map(|x| msg.bboxes[x].center);
         let bbox_half_sizes = (0..detection_count).map(|x| msg.bboxes[x].half_size);
         self.recording.log(
-            format!("/cameras/{}/detections/boxes", camera),
+            format!("/cameras/detections/{}/boxes", camera),
             &rerun::Boxes2D::from_centers_and_half_sizes(bbox_centers, bbox_half_sizes)
                 .with_class_ids(ids.clone()),
         )?;
 
         // Log position in world
-        let world_points_rr =
-            rerun::Points2D::new(world_positions.axis_iter(Axis(0)).map(|x| (x[0], x[1])));
+        let world_points_rr = rerun::Points3D::new(
+            world_positions
+                .axis_iter(Axis(0))
+                .map(|x| (x[0], x[1], 0.0)),
+        );
         self.recording.log(
-            format!("/world/{}/detections/positions", camera),
-            &world_points_rr.with_class_ids(ids).with_radii([20.0]),
+            format!("/world/detections/{}/positions", camera),
+            &world_points_rr.with_class_ids(ids).with_radii([1.0]),
         )?;
 
         // Log masks
         const THRESHOLD: u8 = (0.8 * 255.0) as u8;
-        let mut image_classes = ndarray::Array::<u8, _>::zeros((mask_height, mask_width).f());
+        let mut image_classes = ndarray::Array2::<u8>::zeros((mask_height, mask_width).f());
         for id in 0..detection_count {
             // Log image
             let mask_i = masks.slice(s![id, .., ..]);

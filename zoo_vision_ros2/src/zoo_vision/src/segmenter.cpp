@@ -77,6 +77,7 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options)
     }
     // DEBUG print model info
   }
+  elephant_label_id_ = config["models"]["elephant_label_id"].get<int>();
 
   // Subscribe to receive images from camera
   const auto imageTopic = cameraName_ + "/image";
@@ -180,11 +181,11 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
 
   Eigen::Map<Eigen::Matrix3Xf> worldPositionsMap{detectionMsg->world_positions.data(), 3, modelDetectionCount};
 
-  const int ELEPHANT_LABEL_ID = 22;
   int outIndex = 0;
+  const auto world_from_world2 = [](const Eigen::Vector2f &x2) { return Eigen::Vector3f{x2[0], x2[1], 0.0f}; };
   for (int i = 0; i < modelDetectionCount; ++i) {
     const int label = labels[i].item<int>();
-    if (label != ELEPHANT_LABEL_ID) {
+    if (label != elephant_label_id_) {
       continue;
     }
 
@@ -206,8 +207,8 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
     // Project to world
     const Eigen::Vector2f imagePosition = (center + Eigen::Vector2f{0, halfSize[1]}) * resizeFactor;
 
-    const Eigen::Matrix3f H_mapFromCamera = H_mapFromWorld2_ * H_world2FromCamera_;
-    const Eigen::Vector3f worldPosition = (H_mapFromCamera * imagePosition.homogeneous()).hnormalized().homogeneous();
+    const Eigen::Vector3f worldPosition =
+        world_from_world2((H_world2FromCamera_ * imagePosition.homogeneous()).hnormalized());
     worldPositionsMap.col(outIndex) = worldPosition;
 
     outIndex += 1;

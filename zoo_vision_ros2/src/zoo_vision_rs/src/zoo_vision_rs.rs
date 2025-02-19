@@ -1,4 +1,6 @@
 mod rerun_forwarder;
+mod zoo_config;
+
 use libc::c_char;
 use rerun_forwarder::RerunForwarder;
 use std::ffi::CStr;
