@@ -91,21 +91,23 @@ def plot_projections_generic(
     )
 
     fig, axs = plt.subplots(1, 2, figsize=(20, 15))
-    axs[0].imshow(im_submap)
-    axs[1].imshow(im_camera)
+    axs[0].imshow(im_submap, alpha=0.5)
+    axs[1].imshow(im_camera, alpha=0.5)
     ax = axs[0]
     ax.plot(
         floor_polygon_in_submap[:, 0],
         floor_polygon_in_submap[:, 1],
         "-",
         color="purple",
+        label="Transformed floor polygon",
     )
     ax = axs[1]
     ax.plot(
         floor_polygon_in_camera[:, 0],
         floor_polygon_in_camera[:, 1],
         "-",
-        color="lightgreen",
+        color="purple",
+        label="Selected floor polygon",
     )
     for i in range(points_in_image.shape[0]):
         ax = axs[0]
@@ -115,7 +117,8 @@ def plot_projections_generic(
             "*",
             markersize=20,
             color="lightgreen",
-            alpha=0.5,
+            alpha=1,
+            label="Selected map points" if i == 0 else None,
         )
         ax.plot(
             submap_points_exp[i, 0],
@@ -123,7 +126,8 @@ def plot_projections_generic(
             "+",
             markersize=20,
             color="red",
-            alpha=0.5,
+            alpha=1,
+            label="Transformed camera points" if i == 0 else None,
         )
 
         ax = axs[1]
@@ -133,7 +137,8 @@ def plot_projections_generic(
             "*",
             markersize=20,
             color="lightgreen",
-            alpha=0.5,
+            alpha=1,
+            label="Selected camera points" if i == 0 else None,
         )
         ax.plot(
             camera_points_exp[i, 0],
@@ -141,7 +146,8 @@ def plot_projections_generic(
             "+",
             markersize=20,
             color="red",
-            alpha=0.5,
+            alpha=1,
+            label="Transformed map points" if i == 0 else None,
         )
 
     fig.tight_layout()
