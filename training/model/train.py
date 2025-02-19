@@ -22,6 +22,8 @@ import datetime
 import os
 import time
 
+import torch.utils.tensorboard
+
 import presets
 import torch
 import torch.utils.data
@@ -60,7 +62,7 @@ def get_dataset(is_train, args):
             with_masks=with_masks,
         )
     elif args.dataset == "zoo_elephants":
-        num_classes = 91
+        num_classes = 2
         ds = get_zoo_elephants_ds(
             root=args.data_path,
             image_set=image_set,
@@ -68,6 +70,26 @@ def get_dataset(is_train, args):
             use_v2=args.use_v2,
             with_masks=with_masks,
         )
+    elif args.dataset == "mixed_elephants":
+        num_classes = 2
+        ds1 = get_coco(
+            root="/home/dherrera/data/coco",
+            image_set=image_set,
+            mode="elephants",
+            transforms=get_transform(is_train, args),
+            use_v2=args.use_v2,
+            with_masks=with_masks,
+        )
+        ds2 = get_zoo_elephants_ds(
+            root="/home/dherrera/data/elephants/training_data",
+            image_set=image_set,
+            transforms=get_transform(is_train, args),
+            use_v2=args.use_v2,
+            with_masks=with_masks,
+        )
+        from torch.utils.data.dataset import ConcatDataset
+
+        ds = ConcatDataset([ds1, ds2])
     return ds, num_classes
 
 
@@ -436,15 +458,28 @@ def main(args):
     }
     utils.save_on_master(checkpoint, os.path.join(args.output_dir, f"model_base.pth"))
 
+    from torch.utils.tensorboard import SummaryWriter
+
+    tb_writer = SummaryWriter(log_dir=os.path.join(args.output_dir, "tensorboard"))
+
     print("Start training")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
         train_one_epoch(
-            model, optimizer, data_loader, device, epoch, args.print_freq, scaler
+            model,
+            optimizer,
+            data_loader,
+            device,
+            epoch,
+            args.print_freq,
+            scaler,
+            tb_writer=tb_writer,
         )
+
         lr_scheduler.step()
+
         if args.output_dir:
             checkpoint = {
                 "model": model_without_ddp.state_dict(),
@@ -461,9 +496,12 @@ def main(args):
             utils.save_on_master(
                 checkpoint, os.path.join(args.output_dir, "checkpoint.pth")
             )
+            tb_writer.add_scalar(
+                "lr", lr_scheduler.get_last_lr()[0], epoch * len(data_loader)
+            )
 
         # evaluate after every epoch
-        evaluate(model, data_loader_test, device=device)
+        # evaluate(model, data_loader_test, device=device)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

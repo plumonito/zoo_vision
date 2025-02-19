@@ -3,6 +3,7 @@ import sys
 import time
 
 import torch
+from torch.utils.tensorboard import SummaryWriter
 import torchvision.models.detection.mask_rcnn
 import utils
 from coco_eval import CocoEvaluator
@@ -10,7 +11,14 @@ from coco_utils import get_coco_api_from_dataset
 
 
 def train_one_epoch(
-    model, optimizer, data_loader, device, epoch, print_freq, scaler=None
+    model,
+    optimizer,
+    data_loader,
+    device,
+    epoch,
+    print_freq,
+    scaler=None,
+    tb_writer: SummaryWriter | None = None,
 ):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -26,7 +34,10 @@ def train_one_epoch(
             optimizer, start_factor=warmup_factor, total_iters=warmup_iters
         )
 
-    for images, targets in metric_logger.log_every(data_loader, print_freq, header):
+    batch_count = len(data_loader)
+    for i, (images, targets) in enumerate(
+        metric_logger.log_every(data_loader, print_freq, header)
+    ):
         images = list(image.to(device) for image in images)
         targets = [
             {
@@ -61,6 +72,13 @@ def train_one_epoch(
 
         if lr_scheduler is not None:
             lr_scheduler.step()
+
+        if tb_writer:
+            global_step = epoch * batch_count + i
+            tb_writer.add_scalar("Epoch", epoch, global_step)
+            tb_writer.add_scalar("Train/Loss", loss_value, global_step)
+            for k, v in loss_dict_reduced.items():
+                tb_writer.add_scalar(f"Train/{k}", v, global_step)
 
         metric_logger.update(loss=losses_reduced, **loss_dict_reduced)
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
