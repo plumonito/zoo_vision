@@ -57,21 +57,21 @@ impl RerunForwarder {
         recording.log_static("world/map", &world_image_rr)?;
 
         // Map projection
-        {
-            // let f = [t_map_from_world[(0, 0)], t_map_from_world[(1, 1)]];
-            // let p = [t_map_from_world[(0, 2)], t_map_from_world[(1, 2)]];
-            let resolution = [4904.0, 7663.0];
-            let f = [-1.0, -1.0];
-            recording.log_static(
-                "/world/map",
-                &rerun::Pinhole::from_focal_length_and_resolution(f, resolution)
-                    .with_image_plane_distance(1.0),
-            )?;
-        }
+        // {
+        //     // let f = [t_map_from_world[(0, 0)], t_map_from_world[(1, 1)]];
+        //     // let p = [t_map_from_world[(0, 2)], t_map_from_world[(1, 2)]];
+        //     let resolution = [4904.0, 7663.0];
+        //     let f = [-1.0, -1.0];
+        //     recording.log_static(
+        //         "/world/map",
+        //         &rerun::Pinhole::from_focal_length_and_resolution(f, resolution)
+        //             .with_image_plane_distance(1.0),
+        //     )?;
+        // }
         let t_world_from_map = t_map_from_world.qr().try_inverse().unwrap();
         let r = t_world_from_map.fixed_view::<3, 3>(0, 0).clone_owned();
-        let mut t = t_world_from_map.fixed_view::<3, 1>(0, 3).clone_owned();
-        t[2] = -1.0;
+        let t = t_world_from_map.fixed_view::<3, 1>(0, 3).clone_owned();
+        // t[2] = -1.0;
 
         recording.log_static(
             "world/map",
@@ -263,11 +263,8 @@ impl RerunForwarder {
         )?;
 
         // Log position in world
-        let world_points_rr = rerun::Points3D::new(
-            world_positions
-                .axis_iter(Axis(0))
-                .map(|x| (x[0], x[1], 0.0)),
-        );
+        let world_points_rr =
+            rerun::Points2D::new(world_positions.axis_iter(Axis(0)).map(|x| (x[0], x[1])));
         self.recording.log(
             format!("/world/detections/{}/positions", camera),
             &world_points_rr.with_class_ids(ids).with_radii([1.0]),
