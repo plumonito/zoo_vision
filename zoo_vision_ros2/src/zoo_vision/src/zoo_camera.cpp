@@ -49,7 +49,7 @@ ZooCamera::ZooCamera(const rclcpp::NodeOptions &options, int nameIndex)
     const std::string pwd = "PwU82-!MnG";
 
     videoUrl_ = std::format("{}://{}:{}@{}/{}", protocol, username, pwd, address, url);
-    RCLCPP_INFO(get_logger(), "Connecting to camera {} at %s://%s/%s", cameraName_.c_str(), protocol.c_str(),
+    RCLCPP_INFO(get_logger(), "Connecting to camera %s at %s://%s/%s", cameraName_.c_str(), protocol.c_str(),
                 address.c_str(), url.c_str());
   } else {
     videoUrl_ = getDataPath() / "cameras" / cameraName_ / "sample.mp4";

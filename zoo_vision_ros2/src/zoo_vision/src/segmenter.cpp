@@ -60,6 +60,7 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options, int nameIndex)
         throw std::runtime_error("Model does not exist");
       }
       model_ = torch::jit::load(modelPath, torch::kCUDA);
+      model_.eval();
     } catch (const std::exception &ex) {
       std::cout << "Error loading model from " << modelPath << std::endl;
       std::cout << "Exception: " << ex.what() << std::endl;
