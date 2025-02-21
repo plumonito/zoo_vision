@@ -174,11 +174,14 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
 
   int outIndex = 0;
   const auto world_from_world2 = [](const Eigen::Vector2f &x2) { return Eigen::Vector3f{x2[0], x2[1], 0.0f}; };
+  std::vector<Eigen::AlignedBox2f> boxes;
   for (int i = 0; i < modelDetectionCount; ++i) {
     const int label = labels[i].item<int>();
     if (label != elephant_label_id_) {
       continue;
     }
+
+    // Track ids are decided later
 
     // Mask
     const torch::Tensor mask = masks[i];
@@ -188,6 +191,8 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
     const torch::Tensor bbox = boxesNet[i];
     const Eigen::Vector2f x0{bbox[0].item<float32_t>(), bbox[1].item<float32_t>()};
     const Eigen::Vector2f x1{bbox[2].item<float32_t>(), bbox[3].item<float32_t>()};
+    boxes.push_back(Eigen::AlignedBox2f(x0, x1));
+
     const Eigen::Vector2f center = (x0 + x1) / 2;
     const Eigen::Vector2f halfSize = x1 - center;
     detectionMsg->bboxes[outIndex].center[0] = center[0];
@@ -207,6 +212,9 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
   detectionMsg->detection_count = outIndex;
   detectionMsg->masks.sizes[0] = outIndex;
   detectionMsg->processing_time_ns = networkProcessingTimeMs * 1e6f;
+
+  // Assign track ids
+  trackMatcher_.update(boxes, std::span{detectionMsg->track_ids.data(), detectionMsg->detection_count});
 
   detectionPublisher_->publish(std::move(detectionMsg));
 }

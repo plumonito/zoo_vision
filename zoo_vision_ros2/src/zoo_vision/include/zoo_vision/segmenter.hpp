@@ -16,6 +16,7 @@
 #include "zoo_msgs/msg/image12m.hpp"
 #include "zoo_msgs/msg/image4m.hpp"
 #include "zoo_vision/timings.hpp"
+#include "zoo_vision/track_matcher.hpp"
 
 #include <Eigen/Dense>
 #include <c10/cuda/CUDAStream.h>
@@ -42,6 +43,8 @@ private:
 
   int elephant_label_id_;
   torch::jit::script::Module model_;
+
+  TrackMatcher trackMatcher_;
 
   std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>> imageSubscriber_;
 

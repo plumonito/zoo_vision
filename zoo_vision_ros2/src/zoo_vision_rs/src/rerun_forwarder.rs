@@ -274,11 +274,11 @@ impl RerunForwarder {
         const THRESHOLD: u8 = (0.8 * 255.0) as u8;
         let mut image_classes = ndarray::Array2::<u8>::zeros((mask_height, mask_width).f());
         for id in 0..detection_count {
-            // Log image
+            let track_id = msg.track_ids[id];
             let mask_i = masks.slice(s![id, .., ..]);
             for (p, m) in image_classes.iter_mut().zip(mask_i.iter()) {
                 if *m >= THRESHOLD {
-                    *p = (id + 1) as u8;
+                    *p = (track_id) as u8;
                 }
             }
         }

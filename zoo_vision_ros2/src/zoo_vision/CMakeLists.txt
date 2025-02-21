@@ -57,16 +57,18 @@ add_executable(zoo_vision
   include/zoo_vision/zoo_camera.hpp
   include/zoo_vision/segmenter.hpp
   include/zoo_vision/rerun_forwarder.hpp
+  include/zoo_vision/track_matcher.hpp
   # Sources
   src/utils.cpp
   src/zoo_camera.cpp
   src/segmenter.cpp
   src/rerun_forwarder.cpp
+  src/track_matcher.cpp
   src/main.cpp
 )
 
 target_include_directories(zoo_vision PUBLIC include)
-target_compile_features(zoo_vision PUBLIC cxx_std_20)
+target_compile_features(zoo_vision PUBLIC cxx_std_23)
 
 ament_target_dependencies(zoo_vision
   rclcpp
