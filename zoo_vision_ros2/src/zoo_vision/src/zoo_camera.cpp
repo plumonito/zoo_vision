@@ -31,7 +31,8 @@ const std::string DEFAULT_VIDEO_NAME = "sample_video.mp4";
 }
 namespace zoo {
 
-ZooCamera::ZooCamera(const rclcpp::NodeOptions &options) : Node("input_camera", options) {
+ZooCamera::ZooCamera(const rclcpp::NodeOptions &options, int nameIndex)
+    : Node(std::format("input_camera_{}", nameIndex), options) {
   this->cameraName_ = declare_parameter<std::string>("camera_name");
   RCLCPP_INFO(get_logger(), "Starting zoo_camera for %s", cameraName_.c_str());
 
@@ -48,17 +49,20 @@ ZooCamera::ZooCamera(const rclcpp::NodeOptions &options) : Node("input_camera", 
     const std::string pwd = "PwU82-!MnG";
 
     videoUrl_ = std::format("{}://{}:{}@{}/{}", protocol, username, pwd, address, url);
+    RCLCPP_INFO(get_logger(), "Connecting to camera {} at %s://%s/%s", cameraName_.c_str(), protocol.c_str(),
+                address.c_str(), url.c_str());
   } else {
     videoUrl_ = getDataPath() / "cameras" / cameraName_ / "sample.mp4";
+    RCLCPP_INFO(get_logger(), "Loading video from %s", videoUrl_.c_str());
   }
 
   bool ok = cvStream_.open(videoUrl_);
   if (ok) {
     frameWidth_ = cvStream_.get(cv::CAP_PROP_FRAME_WIDTH);
     frameHeight_ = cvStream_.get(cv::CAP_PROP_FRAME_HEIGHT);
-    RCLCPP_INFO(get_logger(), "Opened video %s (%dx%d)", videoUrl_.c_str(), frameWidth_, frameHeight_);
+    RCLCPP_INFO(get_logger(), "Opened video (%dx%d)", frameWidth_, frameHeight_);
   } else {
-    RCLCPP_ERROR(get_logger(), "Failed to open video %s", videoUrl_.c_str());
+    RCLCPP_ERROR(get_logger(), "Failed to open video");
     frameWidth_ = frameHeight_ = 500;
   }
   assert(frameHeight_ * frameWidth_ * 3 <= zoo_msgs::msg::Image12m::DATA_MAX_SIZE);

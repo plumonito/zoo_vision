@@ -35,12 +35,14 @@ int main(int argc, char *argv[]) {
 
   std::vector<std::shared_ptr<rclcpp::Node>> nodes;
 
+  int index = 0;
   for (const auto &cameraName : cameraNames) {
     rclcpp::NodeOptions optionsCamera = options;
     optionsCamera.append_parameter_override("camera_name", cameraName);
 
-    nodes.push_back(std::make_shared<zoo::ZooCamera>(optionsCamera));
-    nodes.push_back(std::make_shared<zoo::Segmenter>(optionsCamera));
+    nodes.push_back(std::make_shared<zoo::ZooCamera>(optionsCamera, index));
+    nodes.push_back(std::make_shared<zoo::Segmenter>(optionsCamera, index));
+    index += 1;
   }
 
   nodes.push_back(std::make_shared<zoo::RerunForwarder>(options));

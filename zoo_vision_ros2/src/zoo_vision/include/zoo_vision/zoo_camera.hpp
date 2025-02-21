@@ -23,7 +23,7 @@
 namespace zoo {
 class ZooCamera : public rclcpp::Node {
 public:
-  explicit ZooCamera(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
+  explicit ZooCamera(const rclcpp::NodeOptions &options = rclcpp::NodeOptions(), int nameIndex = 999);
   void onTimer();
 
   std::string cameraName_;

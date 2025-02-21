@@ -38,8 +38,8 @@ using namespace torch::indexing;
 
 namespace zoo {
 
-Segmenter::Segmenter(const rclcpp::NodeOptions &options)
-    : Node("segmenter", options), cudaStream_{at::cuda::getStreamFromPool()} {
+Segmenter::Segmenter(const rclcpp::NodeOptions &options, int nameIndex)
+    : Node(std::format("segmenter_{}", nameIndex), options), cudaStream_{at::cuda::getStreamFromPool()} {
   cameraName_ = declare_parameter<std::string>("camera_name");
   RCLCPP_INFO(get_logger(), "Starting segmenter for %s", cameraName_.c_str());
 

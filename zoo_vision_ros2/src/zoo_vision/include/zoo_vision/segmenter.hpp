@@ -28,7 +28,7 @@ using float32_t = float;
 
 class Segmenter : public rclcpp::Node {
 public:
-  explicit Segmenter(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
+  explicit Segmenter(const rclcpp::NodeOptions &options = rclcpp::NodeOptions(), int nameIndex = 999);
 
   void loadModel();
   void onImage(const zoo_msgs::msg::Image12m &msg);
