@@ -64,7 +64,7 @@ class Database:
         point_cancelled = False
         for i, other_point in enumerate(other_points):
             diff = np.linalg.norm(other_point - point)
-            if diff < 100:
+            if diff < 10:
                 other_points = np.delete(other_points, (i), axis=0)
                 point_cancelled = True
                 break
