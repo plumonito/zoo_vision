@@ -21,11 +21,11 @@
   },
   "models": {
     "elephant_label_id": 1,
-    "segmentation": "../models/maskrcnn_trained.ptc"
+    "segmentation": "../models/model_coco_twocam/maskrcnn_c2_epoch_399.ptc"
   },
   "models2": {
     "elephant_label_id": 22,
-    "segmentation": "../models/camera0/segmentation/torch.pt"
+    "segmentation": "../models/maskrcnn_coco.ptc"
   },
   "live_stream": true,
   "cameras": {
