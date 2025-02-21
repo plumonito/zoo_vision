@@ -35,7 +35,22 @@ ZooCamera::ZooCamera(const rclcpp::NodeOptions &options) : Node("input_camera", 
   this->cameraName_ = declare_parameter<std::string>("camera_name");
   RCLCPP_INFO(get_logger(), "Starting zoo_camera for %s", cameraName_.c_str());
 
-  videoUrl_ = getDataPath() / "cameras" / cameraName_ / "sample.mp4";
+  const nlohmann::json &config = getConfig();
+  const bool useLiveStream = config["live_stream"].get<bool>();
+
+  if (useLiveStream) {
+    const auto &streamConfig = config["cameras"][cameraName_]["stream"];
+    const std::string protocol = streamConfig["protocol"].get<std::string>();
+    const std::string address = streamConfig["ip"].get<std::string>();
+    const std::string url = streamConfig["url"].get<std::string>();
+    // TODO: oh god, not hardcoded, no :(
+    const std::string username = "daniel";
+    const std::string pwd = "PwU82-!MnG";
+
+    videoUrl_ = std::format("{}://{}:{}@{}/{}", protocol, username, pwd, address, url);
+  } else {
+    videoUrl_ = getDataPath() / "cameras" / cameraName_ / "sample.mp4";
+  }
 
   bool ok = cvStream_.open(videoUrl_);
   if (ok) {

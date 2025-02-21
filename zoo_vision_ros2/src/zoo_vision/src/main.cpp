@@ -15,11 +15,16 @@
 #include "rclcpp/rclcpp.hpp"
 #include "zoo_vision/rerun_forwarder.hpp"
 #include "zoo_vision/segmenter.hpp"
+#include "zoo_vision/utils.hpp"
 #include "zoo_vision/zoo_camera.hpp"
+
 #include <memory>
 
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
+
+  // Load config once before initializing all nodes
+  zoo::loadConfig();
 
   std::vector<std::string> cameraNames = {"zag_elp_cam_016", "zag_elp_cam_017", "zag_elp_cam_018", "zag_elp_cam_019"};
 

@@ -31,12 +31,10 @@
 
 #include <algorithm>
 #include <chrono>
-#include <fstream>
 #include <string.h>
 
 using namespace std::chrono_literals;
 using namespace torch::indexing;
-using json = nlohmann::json;
 
 namespace zoo {
 
@@ -45,17 +43,11 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options)
   cameraName_ = declare_parameter<std::string>("camera_name");
   RCLCPP_INFO(get_logger(), "Starting segmenter for %s", cameraName_.c_str());
 
-  // Load config
-  const auto config = [] {
-    std::ifstream f(getDataPath() / "config.json");
-    json config = json::parse(f);
-    return config;
-  }();
+  const nlohmann::json &config = getConfig();
 
   // Camera calibration
   H_mapFromWorld2_ = config["map"]["T_map_from_world2"];
   H_world2FromCamera_ = config["cameras"][cameraName_]["H_world2_from_camera"];
-  // std::cout << "H_world2FromCamera_: " << H_world2FromCamera_ << std::endl;
 
   // Load model
   {
@@ -68,8 +60,6 @@ Segmenter::Segmenter(const rclcpp::NodeOptions &options)
         throw std::runtime_error("Model does not exist");
       }
       model_ = torch::jit::load(modelPath, torch::kCUDA);
-      // auto modelCpu = torch::jit::load(modelPath, torch::kCUDA);
-      // model_ = modelCpu.to(torch::kCUDA);
     } catch (const std::exception &ex) {
       std::cout << "Error loading model from " << modelPath << std::endl;
       std::cout << "Exception: " << ex.what() << std::endl;

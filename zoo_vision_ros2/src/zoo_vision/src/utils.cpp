@@ -19,9 +19,14 @@
 #include <ATen/ops/from_blob.h>
 
 #include <filesystem>
+#include <fstream>
 #include <string.h>
 
 namespace zoo {
+namespace {
+/// Can only be accessed through loadConfig() and getConfig()
+std::unique_ptr<nlohmann::json> global_config;
+} // namespace
 
 std::filesystem::path getDataPath() {
   static std::filesystem::path dataPath = {};
@@ -84,6 +89,19 @@ at::Tensor mapRosTensor(zoo_msgs::msg::Tensor3b32m &rosTensor) {
   ASSERT_DEBUG(totalSize <= zoo_msgs::msg::Tensor3b32m::DATA_MAX_SIZE);
   return at::from_blob(rosTensor.data.data(), {rosTensor.sizes[0], rosTensor.sizes[1], rosTensor.sizes[2]},
                        at::TensorOptions().dtype(at::kByte));
+}
+
+void loadConfig() {
+  std::ifstream f(getDataPath() / "config.json");
+
+  nlohmann::json config = nlohmann::json::parse(f);
+  global_config = std::make_unique<nlohmann::json>(std::move(config));
+}
+const nlohmann::json &getConfig() {
+  if (global_config == nullptr) {
+    throw std::runtime_error("Config not loaded, call loadConfig() first");
+  }
+  return *global_config;
 }
 
 } // namespace zoo

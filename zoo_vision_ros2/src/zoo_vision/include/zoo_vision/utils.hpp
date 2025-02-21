@@ -19,6 +19,7 @@
 
 #include <ATen/Tensor.h>
 #include <opencv2/core/mat.hpp>
+#include <nlohmann/json.hpp>
 
 #include <filesystem>
 
@@ -42,5 +43,9 @@ cv::Mat3b wrapMat3bFromMsg(const zoo_msgs::msg::Image12m &);
 
 void copyMat1bToMsg(const cv::Mat1b &, zoo_msgs::msg::Image4m &);
 at::Tensor mapRosTensor(zoo_msgs::msg::Tensor3b32m &rosTensor);
+
+void loadConfig();
+const nlohmann::json& getConfig();
+
 
 } // namespace zoo
