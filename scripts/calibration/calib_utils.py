@@ -116,7 +116,7 @@ def plot_projections_generic(
             submap_points[i, 1],
             "*",
             markersize=20,
-            color="lightgreen",
+            color="darkgreen",
             alpha=1,
             label="Selected map points" if i == 0 else None,
         )
@@ -136,7 +136,7 @@ def plot_projections_generic(
             points_in_image[i, 1],
             "*",
             markersize=20,
-            color="lightgreen",
+            color="darkgreen",
             alpha=1,
             label="Selected camera points" if i == 0 else None,
         )
