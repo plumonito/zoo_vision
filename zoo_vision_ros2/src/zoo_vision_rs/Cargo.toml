@@ -37,5 +37,5 @@ version = "*"
 version = "*"
 
 [dependencies.rerun]
-version = "0.21.0"
+version = "0.22.1"
 features = ["web_viewer"]

@@ -26,7 +26,7 @@ lark
 fiftyone # To browse coco datasets and predictions
 
 # Rerun is our main visualization library
-rerun-sdk==0.21.0
+rerun-sdk==0.22.1
 
 # Labelling tool requirements
 git+https://github.com/plumonito/sam2 # Custom repo to allow passing images directly 
