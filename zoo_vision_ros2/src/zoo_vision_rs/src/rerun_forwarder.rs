@@ -40,6 +40,9 @@ impl RerunForwarder {
             false,
         )?;
 
+        // Log the blueprint
+        recording.log_file_from_path(data_path.join("zoo_vision.rbl"), None, true)?;
+
         // Load config
         let file =
             std::fs::File::open(data_path.join("config.json")).expect("Config json file not found");
