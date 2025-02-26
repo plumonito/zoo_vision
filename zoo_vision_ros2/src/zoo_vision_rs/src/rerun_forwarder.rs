@@ -236,7 +236,9 @@ impl RerunForwarder {
             .set_time_nanos("ros_time", ros_time_ns as i64);
 
         let detection_count = msg.detection_count as usize;
-        let ids: Vec<_> = (1..(detection_count + 1) as u16).collect();
+        let ids: Vec<u16> = (0..detection_count)
+            .map(|x| msg.track_ids[x] as u16)
+            .collect();
 
         // Map message data to image array
         assert!(msg.detection_count == msg.masks.sizes[0]);
@@ -257,7 +259,7 @@ impl RerunForwarder {
         let bbox_centers = (0..detection_count).map(|x| msg.bboxes[x].center);
         let bbox_half_sizes = (0..detection_count).map(|x| msg.bboxes[x].half_size);
         self.recording.log(
-            format!("/cameras/detections/{}/boxes", camera),
+            format!("/cameras/{}/detections/boxes", camera),
             &rerun::Boxes2D::from_centers_and_half_sizes(bbox_centers, bbox_half_sizes)
                 .with_class_ids(ids.clone()),
         )?;
@@ -273,9 +275,9 @@ impl RerunForwarder {
         // Log masks
         const THRESHOLD: u8 = (0.8 * 255.0) as u8;
         let mut image_classes = ndarray::Array2::<u8>::zeros((mask_height, mask_width).f());
-        for id in 0..detection_count {
-            let track_id = msg.track_ids[id];
-            let mask_i = masks.slice(s![id, .., ..]);
+        for idx in 0..detection_count {
+            let track_id = msg.track_ids[idx];
+            let mask_i = masks.slice(s![idx, .., ..]);
             for (p, m) in image_classes.iter_mut().zip(mask_i.iter()) {
                 if *m >= THRESHOLD {
                     *p = (track_id) as u8;
