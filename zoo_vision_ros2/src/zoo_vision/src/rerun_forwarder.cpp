@@ -18,6 +18,7 @@
 
 #include <cv_bridge/cv_bridge.hpp>
 #include <nlohmann/json.hpp>
+#include <nvtx3/nvtx3.hpp>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <rclcpp/time.hpp>
@@ -104,14 +105,14 @@ RerunForwarder::RerunForwarder(const rclcpp::NodeOptions &options)
 
 void RerunForwarder::onImage(const std::string &cameraTopic, const std::string &channel,
                              const zoo_msgs::msg::Image12m &msg) {
-  // auto frame_id = reinterpret_cast<const char *>(&msg.header.frame_id.data);
+  nvtx3::scoped_range nvtxLabel{"rerun_image"};
   // RCLCPP_INFO(get_logger(), "Received img (id=%s)", frame_id);
   zoo_rs_image_callback(rsHandle_, cameraTopic.c_str(), channel.c_str(), &msg);
 }
 
 void RerunForwarder::onDetection(const std::string &cameraTopic, const std::string &channel,
                                  const zoo_msgs::msg::Detection &msg) {
-  // auto frame_id = reinterpret_cast<const char *>(&msg.header.frame_id.data);
+  nvtx3::scoped_range nvtxLabel{"rerun_detection"};
   // RCLCPP_INFO(get_logger(), "Received img (id=%s)", frame_id);
   // zoo_rs_test_me(rsHandle_, frame_id);
   zoo_rs_detection_callback(rsHandle_, cameraTopic.c_str(), channel.c_str(), &msg);

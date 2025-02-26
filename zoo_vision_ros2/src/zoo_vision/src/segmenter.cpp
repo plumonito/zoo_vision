@@ -86,6 +86,7 @@ void Segmenter::loadModel() {}
 
 void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
   at::cuda::CUDAStreamGuard streamGuard{cudaStream_};
+  std::optional<nvtx3::scoped_range> nvtxLabel{"seg_before (" + cameraName_ + ")"};
 
   at::cuda::CUDAEvent eventBeforeNetwork{cudaEventDefault}, eventAfterNetwork{cudaEventDefault};
 
@@ -120,8 +121,7 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
 
     c10::List<torch::Tensor> imageList({imageTensor});
     {
-      std::string label = "network " + cameraName_;
-      nvtx3::scoped_range nvtxLabel{label};
+      nvtxLabel.emplace("seg_network (" + cameraName_ + ")");
 
       eventBeforeNetwork.record();
       // TorchScript models require a List[IValue] as input
@@ -130,6 +130,7 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
     }
 
     // Publish image to have it in sync with masks
+    nvtxLabel.emplace("seg_after (" + cameraName_ + ")");
     detectionImagePublisher_->publish(std::move(detectionImageMsg));
   }
 
