@@ -15,6 +15,8 @@ from torch.utils.data.dataloader import default_collate
 from torchvision.transforms.functional import InterpolationMode
 from transforms import get_mixup_cutmix
 
+from torch.utils.tensorboard import SummaryWriter
+
 
 def train_one_epoch(
     model,
@@ -26,11 +28,14 @@ def train_one_epoch(
     args,
     model_ema=None,
     scaler=None,
+    tb_writer: SummaryWriter | None = None,
 ):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter("lr", utils.SmoothedValue(window_size=1, fmt="{value}"))
     metric_logger.add_meter("img/s", utils.SmoothedValue(window_size=10, fmt="{value}"))
+
+    batch_count = len(data_loader)
 
     header = f"Epoch: [{epoch}]"
     for i, (image, target) in enumerate(
@@ -63,12 +68,19 @@ def train_one_epoch(
                 # Reset ema buffer to keep copying weights during warmup period
                 model_ema.n_averaged.fill_(0)
 
-        acc1, acc5 = utils.accuracy(output, target, topk=(1, 5))
+        acc1, acc2 = utils.accuracy(output, target, topk=(1, 2))
         batch_size = image.shape[0]
         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
-        metric_logger.meters["acc5"].update(acc5.item(), n=batch_size)
+        metric_logger.meters["acc2"].update(acc2.item(), n=batch_size)
         metric_logger.meters["img/s"].update(batch_size / (time.time() - start_time))
+
+        if tb_writer:
+            global_step = epoch * batch_count + i
+            tb_writer.add_scalar("Epoch", epoch, global_step)
+            tb_writer.add_scalar("Train/Loss", loss.item(), global_step)
+            tb_writer.add_scalar("Train/acc1", acc1.item(), global_step)
+            tb_writer.add_scalar("Train/acc2", acc2.item(), global_step)
 
 
 def evaluate(model, criterion, data_loader, device, print_freq=100, log_suffix=""):
@@ -274,9 +286,16 @@ def main(args):
     )
 
     print("Creating model")
+    num_pretrained_classes = 1000
     model = torchvision.models.get_model(
-        args.model, weights=args.weights, num_classes=num_classes
+        args.model, weights=args.weights, num_classes=num_pretrained_classes
     )
+    if num_pretrained_classes != num_classes:
+        print(
+            "Replacing final classifier layer because pretrained class count doesn't match"
+        )
+        num_features = model.classifier.in_features
+        model.classifier = nn.Linear(num_features, num_classes)
     model.to(device)
 
     if args.distributed and args.sync_bn:
@@ -420,6 +439,8 @@ def main(args):
             evaluate(model, criterion, data_loader_test, device=device)
         return
 
+    tb_writer = SummaryWriter(log_dir=os.path.join(args.output_dir, "tensorboard"))
+
     print("Start training")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
@@ -435,6 +456,7 @@ def main(args):
             args,
             model_ema,
             scaler,
+            tb_writer=tb_writer,
         )
         lr_scheduler.step()
         evaluate(model, criterion, data_loader_test, device=device)

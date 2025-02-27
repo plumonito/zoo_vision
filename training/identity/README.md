@@ -1,3 +1,8 @@
+# Command used for elephants
+```
+python train.py --data-path /home/dherrera/data/elephants/identity/dataset --model densenet121 --weights DenseNet121_Weights.IMAGENET1K_V1 --output-dir ~/Downloads/train_identity
+```
+
 # Image classification reference training scripts
 
 This folder contains reference training scripts for image classification.

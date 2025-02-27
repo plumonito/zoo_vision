@@ -1,3 +1,8 @@
+# Command used for elephants
+```
+torchrun --nproc_per_node=1 train.py --dataset mixed_elephants --model maskrcnn_resnet50_fpn_v2 --epochs 400 --lr-steps 352 384 --batch-size 2 --weights-backbone ResNet50_Weights.IMAGENET1K_V1 --weight-decay 0.00004 --data-augmentation lsj --data-path /home/dherrera/data/elephants/training_data --output-dir ~/Downloads/train_output
+```
+
 # Object detection reference training scripts
 
 This folder contains reference training scripts for object detection.
