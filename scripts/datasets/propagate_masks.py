@@ -8,22 +8,10 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import enlighten
 import gc
-
 from typing import Any
 
-
-def get_project_root():
-    p = Path.cwd()
-    while p.name != "zoo_vision":
-        if p == p.parent:
-            raise RuntimeError(
-                "Could not find a path named zoo_vision in the hierarchy. Cannot determine project root."
-            )
-        p = p.parent
-    return p
-
-
-PROJECT_ROOT = get_project_root()
+from project_root import PROJECT_ROOT
+from segmentation_utils import grey_from_label
 
 INPUT_VIDEO_ROOT = Path(
     "/home/dherrera/data/elephants/identity/videos/src/identity_days"
@@ -69,33 +57,16 @@ def mask_iou(a, b) -> float:
     return iou
 
 
-def segmentation_from_masks(
-    obj_ids: list[int], masks: torch.Tensor
-) -> torch.Tensor | None:
-    AREA_THRESHOLD = 1500
+def segmentation_from_logits(logits: torch.Tensor, obj_ids: list[int]) -> torch.Tensor:
+    logits = logits[:, 0, :, :]  # Drop batch dimension
+    logit_union, mask_idx = logits.max(dim=0)
 
-    device = masks.device
-    obj_count = len(obj_ids)
-    intersections = torch.zeros((obj_count,), dtype=torch.int32, device=device)
+    h, w = logit_union.shape
+    segmentation = torch.zeros([h, w], dtype=torch.uint8, device=logits.device)
+    valid_idx = logit_union > 0
 
-    segmentation: torch.Tensor | None = None
-    for i, (obj_id, mask) in enumerate(zip(obj_ids, masks)):
-        mask = mask[0]
-        pixel_value = 255 / obj_count * (obj_id + 1)
-        if mask.sum().cpu() < AREA_THRESHOLD:
-            continue
-
-        mask_u8: torch.Tensor = (mask * pixel_value).to(torch.uint8)
-        if segmentation is None:
-            segmentation = mask_u8
-        else:
-            intersections[i] = (segmentation & mask_u8).sum()
-            segmentation = segmentation + mask_u8
-
-    # Check intersections
-    all_intersections = intersections.sum().cpu()
-    if all_intersections > 0:
-        print(f"Warning: the different labels overlap by {all_intersections} px.")
+    for idx, obj_id in enumerate(obj_ids):
+        segmentation[valid_idx & (mask_idx == idx)] = grey_from_label(obj_id)
     return segmentation
 
 
@@ -130,9 +101,18 @@ class App:
     def __init__(self):
         self.pbar_manager = enlighten.get_manager()
         self.predictor: sam2.sam2_video_predictor.SAM2VideoPredictor | None = None
+        self.identity_labels = {}  # {name: id}
 
     def main(self) -> None:
-        import time
+        print("Loading identity labels...")
+        with (PROJECT_ROOT / "data/config.json").open() as f:
+            config = json.load(f)
+        self.identity_labels = {
+            name: props["id"] for name, props in config["individuals"].items()
+        }
+        # Correct misspelling
+        self.identity_labels["Farha"] = self.identity_labels["Fahra"]
+        print(self.identity_labels)
 
         print("Loading SAM2...")
         torch.autocast("cuda", dtype=torch.bfloat16).__enter__()
@@ -176,21 +156,20 @@ class App:
 
         print("Processing...")
         total_files = [len(l) for l in labelled_videos.values()]
-        with self.pbar_manager.counter(
+        pbar_video = self.pbar_manager.counter(
             total=np.sum(total_files), desc="Processing videos", unit="video"
-        ) as pbar_video:
-            for camera_name, labelled in labelled_videos.items():
-                for video_path in labelled:
-                    pbar_video.update()
-
-                    # Check to see if there are already images
-                    if are_results_present(camera_name, video_path):
-                        print(
-                            f"Found existing images for {camera_name}/{video_path.name}, skipping video"
-                        )
-                        continue
-
+        )
+        for camera_name, labelled in labelled_videos.items():
+            for video_path in labelled:
+                # Check to see if there are already images
+                if are_results_present(camera_name, video_path):
+                    print(
+                        f"Found existing images for {camera_name}/{video_path.name}, skipping video"
+                    )
+                else:
                     self.process_video(camera_name, video_path)
+                pbar_video.update()
+        pbar_video.close()
 
     def process_video(self, camera_name: str, video_path: Path):
         print(f"Processing {str(video_path)}...")
@@ -219,8 +198,6 @@ class App:
             f"distance_to_next_label: median={np.median(distance_to_next_label)}, min={np.min(distance_to_next_label)}, max={np.max(distance_to_next_label)}"
         )
 
-        IOU_THRESHOLD = 0.9
-        MAX_FRAME_COUNT = 200
         prefix = make_path_prefix(camera_name, video_path)
 
         pbar_anno = self.pbar_manager.counter(
@@ -229,62 +206,12 @@ class App:
             unit="annot",
         )
         for i, data_i in enumerate(points_data):
+            MAX_FRAME_COUNT = 200
+
             frame_count = min(MAX_FRAME_COUNT, distance_to_next_label[i])
-            ref_frame_idx = data_i["frame"]
-            frames = self.load_frames(video, ref_frame_idx, frame_count)
-            if "inference_state" in locals():
-                del inference_state
-            gc.collect()
-            inference_state = self.predictor.init_state(video_path=frames)
 
-            for i, record in enumerate(data_i["records"]):
-                add_label_points(self.predictor, inference_state, i, record)
+            self.process_annotation(video, data_i, frame_count, prefix)
 
-            ref_masks = None
-
-            SKIP_FRAME_COUNT = 10
-            pbar_frames = self.pbar_manager.counter(
-                total=len(frames),
-                desc=f"Propagating frame {ref_frame_idx}",
-                unit="frame",
-                leave=False,
-            )
-            overlap_skip_count = 0
-            total_mask_count = 0
-            for (
-                sam_frame_idx,
-                obj_ids,
-                mask_logits,
-            ) in self.predictor.propagate_in_video(inference_state):
-                pbar_frames.update()
-                if sam_frame_idx % SKIP_FRAME_COUNT != 0:
-                    continue
-
-                total_mask_count += 1
-                video_frame_idx = ref_frame_idx + sam_frame_idx
-
-                masks = mask_logits > 0.0
-                if ref_masks is None:
-                    ref_masks = masks
-                else:
-                    iou = mask_iou(ref_masks, masks).cpu().item()
-                    if iou > IOU_THRESHOLD:
-                        overlap_skip_count += 1
-                        continue
-                    ref_masks = masks
-
-                segmentation_image = segmentation_from_masks(obj_ids, masks)
-                if segmentation_image is None:
-                    break
-                segmentation_image = segmentation_image.cpu().numpy()
-
-                save_frame(
-                    prefix, video_frame_idx, frames[sam_frame_idx], segmentation_image
-                )
-            pbar_frames.close()
-            print(
-                f"Skipped {overlap_skip_count}/{total_mask_count} due to high mask overlap"
-            )
             pbar_anno.update()
         pbar_anno.close()
 
@@ -303,6 +230,68 @@ class App:
             pbar.update()
         pbar.close()
         return frames
+
+    def process_annotation(self, video, annotation, frame_count, prefix):
+        IOU_THRESHOLD = 0.9
+
+        ref_frame_idx = annotation["frame"]
+
+        frames = self.load_frames(video, ref_frame_idx, frame_count)
+        if "inference_state" in locals():
+            del inference_state
+        gc.collect()
+        inference_state = self.predictor.init_state(video_path=frames)
+
+        for record in annotation["records"]:
+            label = self.identity_labels[record["name"]]
+            add_label_points(self.predictor, inference_state, label, record)
+
+        ref_masks = None
+
+        SKIP_FRAME_COUNT = 10
+        pbar_frames = self.pbar_manager.counter(
+            total=len(frames),
+            desc=f"Propagating frame {ref_frame_idx}",
+            unit="frame",
+            leave=False,
+        )
+        overlap_skip_count = 0
+        total_mask_count = 0
+        for (
+            sam_frame_idx,
+            obj_ids,
+            mask_logits,
+        ) in self.predictor.propagate_in_video(inference_state):
+            pbar_frames.update()
+            if sam_frame_idx % SKIP_FRAME_COUNT != 0:
+                continue
+
+            total_mask_count += 1
+            video_frame_idx = ref_frame_idx + sam_frame_idx
+
+            segmentation_image = segmentation_from_logits(mask_logits, obj_ids)
+            mask_all = segmentation_image > 0
+            if mask_all.sum() == 0:
+                break
+
+            if ref_masks is None:
+                ref_masks = mask_all
+            else:
+                iou = mask_iou(ref_masks, mask_all).cpu().item()
+                if iou > IOU_THRESHOLD:
+                    overlap_skip_count += 1
+                    continue
+                ref_masks = mask_all
+
+            segmentation_image = segmentation_image.cpu().numpy()
+
+            save_frame(
+                prefix, video_frame_idx, frames[sam_frame_idx], segmentation_image
+            )
+        pbar_frames.close()
+        print(
+            f"Skipped {overlap_skip_count}/{total_mask_count} due to high mask overlap"
+        )
 
 
 def fake_tqdm(x, desc):
