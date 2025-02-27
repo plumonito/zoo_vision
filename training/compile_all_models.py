@@ -17,15 +17,37 @@ def get_project_root():
 PROJECT_ROOT = get_project_root()
 
 
+class ModelWithTransforms(torch.nn.Module):
+    def __init__(self, model, transforms):
+        super().__init__()
+        self.model = model
+        self.transforms = transforms
+
+    def forward(self, x):
+        xn = self.transforms(x)
+        y = self.model.forward(xn)
+        return y
+
+
 def compile_model(weights_path: Path, output_path: Path) -> None:
     print(f"Compiling {weights_path}")
     print("Loading empty model...")
     if weights_path.name.startswith("maskrcnn_c2_"):
-        model = torchvision.models.get_model(
-            "maskrcnn_resnet50_fpn_v2",
+        model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(
             weights=None,
             weights_backbone=None,
             num_classes=2,
+        )
+        model_with_transforms = model
+    elif weights_path.name.startswith("dense121_c5_"):
+        model = torchvision.models.densenet121(
+            num_classes=5,
+        )
+        model_with_transforms = ModelWithTransforms(
+            model,
+            torchvision.models.DenseNet121_Weights.IMAGENET1K_V1.transforms(
+                antialias=True
+            ),
         )
     else:
         raise RuntimeError("Unknown model")
@@ -37,7 +59,7 @@ def compile_model(weights_path: Path, output_path: Path) -> None:
     model.load_state_dict(checkpoint["model"])
     model.eval()
 
-    traced_module = torch.jit.script(model)
+    traced_module = torch.jit.script(model_with_transforms)
     traced_module.save(output_path)
 
 
