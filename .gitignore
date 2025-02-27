@@ -177,4 +177,7 @@ build/**
 install/**
 log/**
 models
-data
+
+data/**/*.mp4
+# Rerun Blueprint
+**/*.rbl
