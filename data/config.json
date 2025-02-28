@@ -57,6 +57,15 @@
     "identity": "../models/identity/dense121_c5_identity.ptc"
   },
   "live_stream": false,
+  "enabled_cameras2": [
+    "zag_elp_cam_016",
+    "zag_elp_cam_017",
+    "zag_elp_cam_018",
+    "zag_elp_cam_019"
+  ],
+  "enabled_cameras": [
+    "zag_elp_cam_016"
+  ],
   "cameras": {
     "zag_elp_cam_016": {
       "stream": {

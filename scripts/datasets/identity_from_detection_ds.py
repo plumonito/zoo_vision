@@ -4,12 +4,12 @@ import json
 import matplotlib.pyplot as plt
 from pathlib import Path
 import enlighten
-import gc
+import torch
 
 from typing import Any
 
 from project_root import PROJECT_ROOT
-from segmentation_utils import bbox_from_mask, label_from_grey
+from scripts.datasets.segmentation_utils import bbox_from_mask, label_from_grey
 
 pbar_manager = enlighten.get_manager()
 
@@ -27,7 +27,21 @@ def crop_bbox(im_color: np.ndarray, bbox: tuple[int, int, int, int]):
     cy0 = int(np.floor((CROP_SIZE - rescale_size[1]) / 2))
 
     patch = im_color[y0 : (y0 + h), x0 : (x0 + w), :]
-    rescale = cv2.resize(patch, rescale_size, interpolation=cv2.INTER_LINEAR)
+
+    # cv2 and torch methods should be equivalent
+    USE_CV2 = False
+    if USE_CV2:
+        rescale = cv2.resize(patch, rescale_size, interpolation=cv2.INTER_LINEAR)
+    else:
+        patch_tensor = torch.from_numpy(patch).permute([2, 0, 1])
+        patch_tensor = patch_tensor[None, ...]
+        rescale_tensor = torch.nn.functional.interpolate(
+            patch_tensor,
+            [rescale_size[1], rescale_size[0]],
+            mode="bilinear",
+            antialias=True,
+        )
+        rescale = rescale_tensor[0].permute([1, 2, 0]).numpy()
 
     crop = np.zeros([CROP_SIZE, CROP_SIZE, 3], dtype=np.uint8)
     crop[cy0 : (cy0 + rescale_size[1]), cx0 : (cx0 + rescale_size[0]), :] = rescale

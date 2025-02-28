@@ -56,12 +56,15 @@ add_executable(zoo_vision
   include/zoo_vision/json_eigen.hpp
   include/zoo_vision/zoo_camera.hpp
   include/zoo_vision/segmenter.hpp
+  include/zoo_vision/identifier.hpp
   include/zoo_vision/rerun_forwarder.hpp
   include/zoo_vision/track_matcher.hpp
   # Sources
   src/utils.cpp
+  src/json_eigen.cpp
   src/zoo_camera.cpp
   src/segmenter.cpp
+  src/identifier.cpp
   src/rerun_forwarder.cpp
   src/track_matcher.cpp
   src/main.cpp

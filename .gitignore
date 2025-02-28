@@ -181,3 +181,5 @@ models
 data/**/*.mp4
 # Rerun Blueprint
 **/*.rbl
+
+debug/**

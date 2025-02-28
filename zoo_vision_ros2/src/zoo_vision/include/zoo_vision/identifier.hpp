@@ -16,7 +16,6 @@
 #include "zoo_msgs/msg/detection.hpp"
 #include "zoo_msgs/msg/image12m.hpp"
 #include "zoo_msgs/msg/image4m.hpp"
-#include "zoo_vision/identifier.hpp"
 #include "zoo_vision/timings.hpp"
 #include "zoo_vision/track_matcher.hpp"
 
@@ -32,32 +31,20 @@ namespace zoo {
 
 using float32_t = float;
 
-class Segmenter : public rclcpp::Node {
+class Identifier : public rclcpp::Node {
 public:
-  explicit Segmenter(const rclcpp::NodeOptions &options = rclcpp::NodeOptions(), int nameIndex = 999);
+  explicit Identifier(const rclcpp::NodeOptions &options = rclcpp::NodeOptions(), int nameIndex = 999);
 
   void readConfig(const nlohmann::json &config);
   void loadModel(const std::filesystem::path &modelPath);
-  void onImage(const zoo_msgs::msg::Image12m &msg);
+
+  void onDetection(const at::cuda::CUDAStream &cudaStream_, const torch::Tensor &imageGpu,
+                   std::span<zoo_msgs::msg::BoundingBox2D> bboxes);
 
 private:
   std::string cameraName_;
-  at::cuda::CUDAStream cudaStream_;
   RateSampler rateSampler_;
-  Eigen::Matrix3f H_world2FromCamera_;
-  Eigen::Matrix3f H_mapFromWorld2_;
 
-  int elephant_label_id_;
-  torch::jit::script::Module model_;
-
-  TrackMatcher trackMatcher_;
-
-  // TODO: Move this to an independent node
-  std::shared_ptr<Identifier> identifier_;
-
-  std::shared_ptr<rclcpp::Subscription<zoo_msgs::msg::Image12m>> imageSubscriber_;
-
-  std::shared_ptr<rclcpp::Publisher<zoo_msgs::msg::Image12m>> detectionImagePublisher_;
-  std::shared_ptr<rclcpp::Publisher<zoo_msgs::msg::Detection>> detectionPublisher_;
+  torch::jit::script::Module identityNetwork_;
 };
 } // namespace zoo
