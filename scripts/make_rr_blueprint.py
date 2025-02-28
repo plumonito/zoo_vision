@@ -2,19 +2,34 @@ import rerun.blueprint as rrb
 
 
 def make_blueprint():
+    cameras = [
+        "zag_elp_cam_016",
+        "zag_elp_cam_017",
+        "zag_elp_cam_018",
+        "zag_elp_cam_019",
+    ]
+
+    camera_grid = rrb.Grid(
+        grid_columns=2,
+        contents=[
+            rrb.Spatial2DView(
+                origin=f"/cameras/{camera}",
+                visual_bounds=rrb.VisualBounds2D(
+                    # Hard-coded camera count
+                    # x_range=[0, 2],
+                    # y_range=[0, 1],
+                ),
+            )
+            for camera in cameras
+        ],
+    )
+
     my_blueprint = rrb.Blueprint(
         rrb.Vertical(
             contents=[
                 rrb.Horizontal(
                     contents=[
-                        rrb.Spatial2DView(
-                            origin="/cameras",
-                            visual_bounds=rrb.VisualBounds2D(
-                                # Hard-coded camera count
-                                x_range=[0, 2],
-                                y_range=[0, 1],
-                            ),
-                        ),
+                        camera_grid,
                         rrb.Spatial2DView(
                             origin="/world",
                             visual_bounds=rrb.VisualBounds2D(
