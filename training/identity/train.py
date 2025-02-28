@@ -83,7 +83,16 @@ def train_one_epoch(
             tb_writer.add_scalar("Train/acc2", acc2.item(), global_step)
 
 
-def evaluate(model, criterion, data_loader, device, print_freq=100, log_suffix=""):
+def evaluate(
+    model,
+    epoch,
+    criterion,
+    data_loader,
+    device,
+    print_freq=100,
+    log_suffix="",
+    tb_writer: SummaryWriter | None = None,
+):
     model.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = f"Test: {log_suffix}"
@@ -96,13 +105,13 @@ def evaluate(model, criterion, data_loader, device, print_freq=100, log_suffix="
             output = model(image)
             loss = criterion(output, target)
 
-            acc1, acc5 = utils.accuracy(output, target, topk=(1, 5))
+            acc1, acc2 = utils.accuracy(output, target, topk=(1, 2))
             # FIXME need to take into account that the datasets
             # could have been padded in distributed setup
             batch_size = image.shape[0]
             metric_logger.update(loss=loss.item())
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
-            metric_logger.meters["acc5"].update(acc5.item(), n=batch_size)
+            metric_logger.meters["acc2"].update(acc2.item(), n=batch_size)
             num_processed_samples += batch_size
     # gather the stats from all processes
 
@@ -123,8 +132,12 @@ def evaluate(model, criterion, data_loader, device, print_freq=100, log_suffix="
     metric_logger.synchronize_between_processes()
 
     print(
-        f"{header} Acc@1 {metric_logger.acc1.global_avg:.3f} Acc@5 {metric_logger.acc5.global_avg:.3f}"
+        f"{header} Acc@1 {metric_logger.acc1.global_avg:.3f} Acc@2 {metric_logger.acc2.global_avg:.3f}"
     )
+    assert tb_writer is not None
+    tb_writer.add_scalar("Val/acc1", metric_logger.acc1.global_avg, epoch)
+    tb_writer.add_scalar("Val/acc2", metric_logger.acc2.global_avg, epoch)
+
     return metric_logger.acc1.global_avg
 
 
@@ -253,6 +266,7 @@ def main(args):
     dataset, dataset_test, train_sampler, test_sampler = load_data(
         train_dir, val_dir, args
     )
+    print(f"Dataset: {len(dataset)} images")
 
     num_classes = len(dataset.classes)
     mixup_cutmix = get_mixup_cutmix(
@@ -459,7 +473,14 @@ def main(args):
             tb_writer=tb_writer,
         )
         lr_scheduler.step()
-        evaluate(model, criterion, data_loader_test, device=device)
+        evaluate(
+            model,
+            epoch,
+            criterion,
+            data_loader_test,
+            device=device,
+            tb_writer=tb_writer,
+        )
         if model_ema:
             evaluate(
                 model_ema, criterion, data_loader_test, device=device, log_suffix="EMA"
