@@ -220,7 +220,8 @@ void Segmenter::onImage(const zoo_msgs::msg::Image12m &imageMsg) {
   trackMatcher_.update(boxes, std::span{detectionMsg->track_ids.data(), detectionMsg->detection_count});
 
   // Identify
-  identifier_->onDetection(cudaStream_, imageTensor, std::span{detectionMsg->bboxes.data(), outIndex});
+  identifier_->onDetection(cudaStream_, imageTensor, std::span{detectionMsg->bboxes.data(), outIndex},
+                           std::span{detectionMsg->identity_ids.data(), outIndex});
   detectionPublisher_->publish(std::move(detectionMsg));
 }
 

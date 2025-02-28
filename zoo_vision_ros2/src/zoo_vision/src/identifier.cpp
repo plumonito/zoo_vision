@@ -83,7 +83,8 @@ void saveTensorImage(const at::Tensor &imgTensor, const std::string &name) {
 }
 
 void Identifier::onDetection(const at::cuda::CUDAStream &cudaStream_, const torch::Tensor &imageGpu,
-                             std::span<zoo_msgs::msg::BoundingBox2D> bboxes) {
+                             const std::span<const zoo_msgs::msg::BoundingBox2D> bboxes,
+                             std::span<uint32_t> outputIdentities) {
   at::cuda::CUDAStreamGuard streamGuard{cudaStream_};
   std::optional<nvtx3::scoped_range> nvtxLabel{"id_before (" + cameraName_ + ")"};
 
@@ -97,8 +98,6 @@ void Identifier::onDetection(const at::cuda::CUDAStream &cudaStream_, const torc
       at::zeros({detectionCount, channels, CROP_SIZE, CROP_SIZE}, at::TensorOptions(at::kCUDA).dtype(at::kFloat));
   // Extract crops
   for (const auto &[i, bbox] : std::views::enumerate(bboxes)) {
-    // int i = 0;
-    // auto &bbox = bboxes[0];
     const float32_t bboxAspect = static_cast<float32_t>(bbox.half_size[0]) / static_cast<float32_t>(bbox.half_size[1]);
     const auto bboxPatch = imageGpu.index({
         None,
@@ -106,49 +105,38 @@ void Identifier::onDetection(const at::cuda::CUDAStream &cudaStream_, const torc
         Slice(bbox.center[1] - bbox.half_size[1], bbox.center[1] + bbox.half_size[1]),
         Slice(bbox.center[0] - bbox.half_size[0], bbox.center[0] + bbox.half_size[0]),
     });
-    std::cout << "bbox: " << bbox.center[0] << "," << bbox.center[1] << "," << bbox.half_size[0] << ","
-              << bbox.half_size[1] << std::endl;
-    std::cout << "bboxPatch: " << bboxPatch.sizes() << std::endl;
 
-    const int64_t rescaleWidth =
-        (bboxAspect >= 1.0f) ? CROP_SIZE : static_cast<int>(std::round(CROP_SIZE * bboxAspect));
-    const int64_t rescaleHeight =
-        (bboxAspect >= 1.0f) ? static_cast<int>(std::round(CROP_SIZE / bboxAspect)) : CROP_SIZE;
-
-    std::cout << "rescaleSize: " << rescaleWidth << "," << rescaleHeight << std::endl;
+    const auto rescaleSize = (bboxAspect >= 1.0f) ? Eigen::Vector2i(CROP_SIZE, std::round(CROP_SIZE / bboxAspect))
+                                                  : Eigen::Vector2i(std::round(CROP_SIZE * bboxAspect), CROP_SIZE);
 
     namespace F = torch::nn::functional;
     const auto interpolateOpts = F::InterpolateFuncOptions()
-                                     .size({{rescaleHeight, rescaleWidth}})
+                                     .size({{rescaleSize.y(), rescaleSize.x()}})
                                      .mode(torch::kBilinear)
                                      .antialias(true)
                                      .align_corners(false);
     assert(std::holds_alternative<torch::enumtype::kBilinear>(interpolateOpts.mode()));
-    auto rescaledPatch = at::ones({1, channels, rescaleHeight, rescaleWidth});
+    auto rescaledPatch = at::ones({1, channels, rescaleSize.y(), rescaleSize.x()});
     rescaledPatch = F::interpolate(bboxPatch, interpolateOpts);
 
-    std::cout << "rescaledPatch: " << rescaledPatch.sizes() << std::endl;
+    const Eigen::Vector2i c0 = (Eigen::Vector2i(CROP_SIZE, CROP_SIZE) - rescaleSize) / 2;
+    const Eigen::Vector2i c1 = c0 + rescaleSize;
 
-    const auto cx0 = (CROP_SIZE - rescaleWidth) / 2;
-    const auto cy0 = (CROP_SIZE - rescaleHeight) / 2;
-
-    auto destRegion = inputRegions[i].index({Slice(), Slice(cy0, cy0 + rescaleHeight), Slice(cx0, cx0 + rescaleWidth)});
-    std::cout << "destRegion: " << destRegion.sizes() << std::endl;
+    auto destRegion = inputRegions[i].index({Slice(), Slice(c0.y(), c1.y()), Slice(c0.x(), c1.x())});
     destRegion.copy_(rescaledPatch[0]);
-
-    // Debug: save to disk
-    cudaStreamSynchronize(cudaStream_);
-    saveTensorImage(bboxPatch[0], "debug/bboxPatch.png");
-    saveTensorImage(rescaledPatch[0], "debug/rescaledPatch.png");
-    saveTensorImage(inputRegions[i], "debug/region0.png");
   }
-  cudaStreamSynchronize(cudaStream_);
-
   // Send to model
-  at::IValue identityResult = identityNetwork_.forward({inputRegions});
-  at::Tensor identityTensor = identityResult.toTensor().to(at::kCPU);
-  std::cout << "Identities: \n" << identityTensor << std::endl;
-  throw std::runtime_error("Stop now");
+  at::Tensor identityResultGpu;
+  {
+    nvtxLabel.emplace("id_net (" + cameraName_ + ")");
+    identityResultGpu = identityNetwork_.forward({inputRegions}).toTensor();
+  }
+  nvtxLabel.emplace("id_after (" + cameraName_ + ")");
+
+  at::Tensor identityTensor = identityResultGpu.to(at::kCPU).argmax(1);
+  for (const auto i : std::views::iota(0u, bboxes.size())) {
+    outputIdentities[i] = identityTensor[i].item<int>() + 1; // Add one because 0 is background
+  }
 }
 
 } // namespace zoo

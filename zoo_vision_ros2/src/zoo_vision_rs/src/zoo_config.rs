@@ -3,9 +3,16 @@ use std::collections::HashMap;
 
 #[derive(Deserialize, Debug)]
 pub struct ZooConfig {
+    pub individuals: HashMap<String, Individual>,
     pub map: Map,
     // pub models: Models,
     pub cameras: HashMap<String, CameraCalib>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Individual {
+    pub id: u32,
+    pub color: String,
 }
 
 #[derive(Deserialize, Debug)]

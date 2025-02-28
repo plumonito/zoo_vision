@@ -1,10 +1,12 @@
 use super::zoo_config::ZooConfig;
 use anyhow::{Error, Result};
+use hex_color::HexColor;
 use image;
 use nalgebra::{Matrix3, Matrix4, Vector3};
 use ndarray::prelude::*;
 use rerun::{demo_util::grid, external::glam, external::ndarray};
-use std::{io::Cursor, path::Path};
+use std::{collections::HashMap, io::Cursor, path::Path};
+
 fn nanosec_from_ros(stamp: &builtin_interfaces::msg::rmw::Time) -> i64 {
     1e9 as i64 * stamp.sec as i64 + stamp.nanosec as i64
 }
@@ -13,6 +15,7 @@ pub struct RerunForwarder {
     recording: rerun::RecordingStream,
     first_ros_time_ns: Option<i64>,
     // camera_indices: HashMap<String, usize>,
+    name_from_identity: HashMap<u32, String>,
 }
 
 fn transform3d_from_2d(t2d: &Matrix3<f32>) -> Matrix4<f32> {
@@ -125,19 +128,44 @@ impl RerunForwarder {
         }
 
         // Log an annotation context to assign a label and color to each class
-        recording.log_static(
-            "/",
-            &rerun::AnnotationContext::new([(
-                0,
+        for (camera_name, _) in config.cameras.iter() {
+            recording.log_static(
+                format!("/cameras/{}/detections", camera_name),
+                &rerun::AnnotationContext::new([(
+                    0,
+                    "Background",
+                    rerun::Rgba32::from_unmultiplied_rgba(0, 0, 0, 0),
+                )]),
+            )?;
+            let mut identity_ctx = vec![(
+                0u16,
                 "Background",
                 rerun::Rgba32::from_unmultiplied_rgba(0, 0, 0, 0),
-            )]),
-        )?;
+            )];
+            for (name, individual) in config.individuals.iter() {
+                let color = HexColor::parse_rgb(&individual.color)?;
+                identity_ctx.push((
+                    individual.id as u16,
+                    name,
+                    rerun::Rgba32::from_unmultiplied_rgba(color.r, color.g, color.b, 128),
+                ));
+            }
+            recording.log_static(
+                format!("/cameras/{}/identities", camera_name),
+                &rerun::AnnotationContext::new(identity_ctx),
+            )?;
+        }
 
         Ok(Self {
             recording,
             first_ros_time_ns: None,
             // camera_indices: HashMap::new(),
+            name_from_identity: HashMap::from_iter(
+                config
+                    .individuals
+                    .iter()
+                    .map(|(name, individual)| (individual.id, name.clone())),
+            ),
         })
     }
 
@@ -196,6 +224,11 @@ impl RerunForwarder {
             &rr_image.with_draw_order(-1.0),
         )?;
 
+        self.recording.log(
+            format!("/cameras/{}/identities", camera),
+            &rerun::Transform3D::from_scale(scale),
+        )?;
+
         // Clear out detections
         // self.recording.set_time_nanos("ros_time", time_ns - 1);
 
@@ -239,10 +272,15 @@ impl RerunForwarder {
             .set_time_nanos("ros_time", ros_time_ns as i64);
 
         let detection_count = msg.detection_count as usize;
-        let ids: Vec<u16> = (0..detection_count)
+        let track_ids: Vec<u16> = (0..detection_count)
             .map(|x| msg.track_ids[x] as u16)
             .collect();
-
+        let identity_ids: Vec<u16> = (0..detection_count)
+            .map(|x| msg.identity_ids[x] as u16)
+            .collect();
+        let labels: Vec<&str> = (0..detection_count)
+            .map(|x| self.name_from_identity[&msg.identity_ids[x]].as_str())
+            .collect();
         // Map message data to image array
         assert!(msg.detection_count == msg.masks.sizes[0]);
         let mask_height = msg.masks.sizes[1] as usize;
@@ -261,10 +299,19 @@ impl RerunForwarder {
         // Log bounding boxes
         let bbox_centers = (0..detection_count).map(|x| msg.bboxes[x].center);
         let bbox_half_sizes = (0..detection_count).map(|x| msg.bboxes[x].half_size);
+        let rerun_boxes =
+            rerun::Boxes2D::from_centers_and_half_sizes(bbox_centers, bbox_half_sizes);
+        // self.recording.log(
+        //     format!("/cameras/{}/detections/boxes", camera),
+        //     &rerun_boxes.clone().with_class_ids(track_ids.clone()),
+        // )?;
+
         self.recording.log(
-            format!("/cameras/{}/detections/boxes", camera),
-            &rerun::Boxes2D::from_centers_and_half_sizes(bbox_centers, bbox_half_sizes)
-                .with_class_ids(ids.clone()),
+            format!("/cameras/{}/identities/boxes", camera),
+            &rerun_boxes
+                .with_class_ids(identity_ids.clone())
+                .with_labels(labels)
+                .with_show_labels(true),
         )?;
 
         // Log position in world
@@ -272,10 +319,10 @@ impl RerunForwarder {
             rerun::Points2D::new(world_positions.axis_iter(Axis(0)).map(|x| (x[0], x[1])));
         self.recording.log(
             format!("/world/detections/{}/positions", camera),
-            &world_points_rr.with_class_ids(ids).with_radii([1.0]),
+            &world_points_rr.with_class_ids(track_ids).with_radii([1.0]),
         )?;
 
-        // Log masks
+        // Log detection masks
         const THRESHOLD: u8 = (0.8 * 255.0) as u8;
         let mut image_classes = ndarray::Array2::<u8>::zeros((mask_height, mask_width).f());
         for idx in 0..detection_count {

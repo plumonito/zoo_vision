@@ -19,6 +19,7 @@ serde = "*"
 serde_derive = "*"
 serde_json = "*" 
 nalgebra = "*"
+hex_color = "3"
 
 
 [dependencies.rclrs]

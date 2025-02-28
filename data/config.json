@@ -2,23 +2,23 @@
   "individuals": {
     "Chandra": {
       "id": 1,
-      "color": "F5FFC6"
+      "color": "#F5FFC6"
     },
     "Indi": {
       "id": 2,
-      "color": "B4E1FF"
+      "color": "#B4E1FF"
     },
     "Fahra": {
       "id": 3,
-      "color": "AB87FF"
+      "color": "#AB87FF"
     },
     "Panang": {
       "id": 4,
-      "color": "EDBBB4"
+      "color": "#EDBBB4"
     },
     "Thai": {
       "id": 5,
-      "color": "C1FF9B"
+      "color": "#C1FF9B"
     }
   },
   "map": {
@@ -57,13 +57,13 @@
     "identity": "../models/identity/dense121_c5_identity.ptc"
   },
   "live_stream": false,
-  "enabled_cameras2": [
+  "enabled_cameras": [
     "zag_elp_cam_016",
     "zag_elp_cam_017",
     "zag_elp_cam_018",
     "zag_elp_cam_019"
   ],
-  "enabled_cameras": [
+  "enabled_cameras2": [
     "zag_elp_cam_016"
   ],
   "cameras": {
