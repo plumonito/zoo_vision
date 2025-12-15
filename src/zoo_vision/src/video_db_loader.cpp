@@ -63,6 +63,16 @@ VideoDBLoader::VideoDBLoader(const rclcpp::NodeOptions &options) : Node("video_d
   // Load database
   std::vector<std::string> enabledCameras = config["enabled_cameras"];
   std::filesystem::path videoDatabase = config["video_db"];
+  if (config.contains("video_root") && !config["video_root"].is_null()) {
+    const std::string videoRootStr = config["video_root"].get<std::string>();
+    if (!videoRootStr.empty()) {
+      videoRootPath_ = videoRootStr;
+    }
+  }
+  if (videoRootPath_.empty()) {
+    videoRootPath_ = videoDatabase.parent_path();
+  }
+  RCLCPP_INFO(get_logger(), "Using video root: %s", videoRootPath_.string().c_str());
   loadVideoDatabase(videoDatabase, enabledCameras);
 
   // Advance replay clock
@@ -80,8 +90,6 @@ VideoDBLoader::VideoDBLoader(const rclcpp::NodeOptions &options) : Node("video_d
 
 void VideoDBLoader::loadVideoDatabase(const std::filesystem::path &database,
                                       const std::span<const std::string> enabledCameras) {
-  const auto videoRootPath = database.parent_path();
-
   std::ifstream f(database);
   if (f.fail()) {
     using namespace std::literals;
@@ -102,7 +110,7 @@ void VideoDBLoader::loadVideoDatabase(const std::filesystem::path &database,
 
     for (auto [videoJson, startTimeJson, endTimeJson] :
          std::ranges::views::zip(cameraJson["videos"], cameraJson["start_times"], cameraJson["end_times"])) {
-      cameraData.videoList_.emplace_back(videoRootPath / videoJson.get<std::string>(),
+      cameraData.videoList_.emplace_back(videoRootPath_ / videoJson.get<std::string>(),
                                          parseTime(startTimeJson.get<std::string>()),
                                          parseTime(endTimeJson.get<std::string>()));
     }

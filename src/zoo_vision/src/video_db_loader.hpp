@@ -57,6 +57,7 @@ private:
   void onTimer();
 
   Clock::time_point replayNow_;
+  std::filesystem::path videoRootPath_;
 
   std::unordered_map<std::string, CameraData> cameras_;
   rclcpp::TimerBase::SharedPtr timer_;
