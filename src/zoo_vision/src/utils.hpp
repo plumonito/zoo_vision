@@ -60,6 +60,8 @@ bool saveTensorImage(const at::Tensor &imgTensor, const std::string &name);
 
 int parseInt(std::string_view data);
 
+std::mutex &getIoMutex();
+
 } // namespace zoo
 
 /////////////////////////////////////////

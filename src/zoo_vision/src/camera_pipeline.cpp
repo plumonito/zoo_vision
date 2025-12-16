@@ -118,6 +118,9 @@ void CameraPipeline::dynamicConfig(Vector2i imageSize) {
 }
 
 void CameraPipeline::onImage(std::shared_ptr<zoo_msgs::msg::Image12m> imageMsgPtr) {
+  static std::mutex g_mutex;
+  std::lock_guard<std::mutex> guard{g_mutex}; // make everything single threaded
+
   const auto &imageMsg = *imageMsgPtr;
   const auto frameId = getMsgString(imageMsg.header.frame_id);
 
@@ -214,6 +217,7 @@ void CameraPipeline::onImage(std::shared_ptr<zoo_msgs::msg::Image12m> imageMsgPt
     recordMasks(videoFile, frameId, trackIds, segmenterResult.masks);
   }
   if (!trackUpdateStats.closedTracks.empty()) {
+    std::lock_guard guard{getIoMutex()}; // Need to lock to close streams
     for (auto &ptrack : trackUpdateStats.closedTracks) {
       auto &track = *ptrack;
       publishTrackClosed(imageMsg.header, track);
@@ -226,6 +230,8 @@ void CameraPipeline::onImage(std::shared_ptr<zoo_msgs::msg::Image12m> imageMsgPt
       }
       trackUpdateStats.closedTracks.clear();
     }
+    // Release all pointers and close all streams
+    trackUpdateStats.closedTracks.clear();
   }
 
   ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -240,7 +246,22 @@ void CameraPipeline::onImage(std::shared_ptr<zoo_msgs::msg::Image12m> imageMsgPt
 
     // Save track images
     if (config_.recordTracks) {
-      recordTracks(sysTime, frameId, trackIds, patches_u8);
+      try {
+        recordTracks(sysTime, frameId, trackIds, patches_u8);
+      } catch (...) {
+        std::cout << "Exception on record tracks" << std::endl;
+        std::cout << "Dead tracks: ";
+        for (const auto &track : trackUpdateStats.closedTracks) {
+          std::cout << track->id << ",";
+        }
+        std::cout << std::endl;
+        std::cout << "Live tracks: ";
+        for (const auto &track : trackMatcher_) {
+          std::cout << track.first << "-" << track.second->id << ", ";
+        }
+        std::cout << std::endl;
+        throw;
+      }
     }
   }
 
@@ -337,10 +358,14 @@ void CameraPipeline::saveImageToImproveBehaviour(SysTime time, TBehaviour behavi
 
 void CameraPipeline::recordTracks(const SysTime /*time*/, std::string_view frameId,
                                   const std::span<const uint32_t> trackIds, const at::Tensor &patches) {
+  if (trackIds.empty()) {
+    // Early return to avoid locking the mutex
+    return;
+  }
+
   at::Tensor patchesRgb = patches.permute({0, 2, 3, 1}).flip(3).to(at::kCPU).contiguous();
 
-  static std::mutex g_mutex;
-  std::lock_guard guard{g_mutex};
+  std::lock_guard guard{getIoMutex()};
 
   for (auto &&[idx, trackId] : std::views::enumerate(trackIds)) {
     if (trackId == TrackMatcher::INVALID_TRACK_ID) {

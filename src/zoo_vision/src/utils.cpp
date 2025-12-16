@@ -166,4 +166,8 @@ int parseInt(std::string_view data) {
   return out;
 }
 
+std::mutex &getIoMutex() {
+  static std::mutex g_ioMutex;
+  return g_ioMutex;
+}
 } // namespace zoo
