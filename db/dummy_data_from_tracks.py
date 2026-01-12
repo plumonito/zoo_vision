@@ -19,7 +19,7 @@ INDIVIDUALS_TO_GROUPS = {
     "Panang": "FP",
     "Thai": "T",
 }
-INDIVIDUALS_TO_ID = {"Chandra": 1, "Farha": 3, "Indi": 2, "Panang": 4, "Thai": 5}
+INDIVIDUALS_TO_ID = {"Chandra": 1, "Farha": 3, "Indi": 2, "Panang": 4, "Thai": 5, "Invalid": 0}
 ROOMS = ["sand_box_ohne", "sand_box_mit", "other"]
 CAMERA_TO_ROOM = {
     "zag_elp_cam_016": "sand_box_ohne",
@@ -47,6 +47,9 @@ def get_args_parser(add_help=True):
 
     parser.add_argument(
         "--dir", "-d", type=Path, help="Path to tracks data", required=True
+    )
+    parser.add_argument(
+        "--dates", type=str, nargs="+", help="Specific dates to process", default=None
     )
     return parser
 
@@ -139,17 +142,36 @@ def log_track(
             behaviour_id = BEHAVIOUR_STAND_ID
 
         db_cursor.execute(
-            "INSERT INTO observations(track_id, time, location, behaviour_id) "
-            "VALUES(%s,%s,point(%s,%s),%s)",
+            """
+            INSERT INTO observations(track_id, "time", location, behaviour_id)
+            VALUES(%s, %s, point(%s, %s), %s)
+            ON CONFLICT (track_id, "time")
+            DO UPDATE SET
+                location = EXCLUDED.location,
+                behaviour_id = EXCLUDED.behaviour_id
+            """,
             (track_id, ts, world_x, world_y, behaviour_id),
         )
 
+def load_individual_from_csv(track_file: Path) -> str:
+    df_track = pd.read_csv(track_file)
+    row_count = len(df_track)
+    if row_count == 0:   ### Empty track csv
+        return None
+    if 'identity_label' not in df_track.columns:
+        return 'Invalid'
+    individual = df_track['identity_label'].mode()[0]
+    return individual
 
 def main(args):
     root_dir: Path = args.dir
     # First gather all dates
     # so we can make consistent data for all cameras
-    all_dates = gather_all_dates(root_dir)
+    if args.dates is not None:
+        all_dates = args.dates
+    else:
+        all_dates = gather_all_dates(root_dir)
+    # all_dates = ["2025-11-15", "2025-11-30", "2025-12-01", "2025-12-15"]
 
     db_connection = psycopg2.connect("dbname=zoo_vision user=dherrera")
     db_cursor = db_connection.cursor()
@@ -172,8 +194,9 @@ def main(args):
                 total=len(track_files), desc="Processing tracks", unit="track"
             )
             for track_file in pbar2(track_files):
-                # Select a random individual for this track
-                individual = random.choice(possible_individuals)
+                individual = load_individual_from_csv(track_file)
+                if individual is None:
+                    continue
                 log_track(
                     db_cursor,
                     camera,
