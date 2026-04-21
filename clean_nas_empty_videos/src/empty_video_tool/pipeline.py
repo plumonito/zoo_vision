@@ -407,27 +407,6 @@ def scan_videos(
         filename_substring=config.filename_substring,
     )
 
-    # Build list of videos to process (filtering already-processed)
-    pending: list[tuple[int, Path, Path]] = []  # (index, video_path, run_dir)
-    for video_index, video_path in enumerate(video_iter, start=1):
-        vid_run_dir = run_dir_for_video(config.output_root, config.data_root, video_path)
-        # check if already processed (skip check when force_rescan is enabled)
-        if not config.force_rescan:
-            if vid_run_dir not in processed_cache:
-                processed_cache[vid_run_dir] = load_processed_video_paths(vid_run_dir)
-            if str(video_path) in processed_cache[vid_run_dir]:
-                _emit(
-                    progress_callback,
-                    ScanProgress(
-                        phase="video_completed",
-                        video_index=video_index,
-                        video_path=str(video_path),
-                        message=f"Skipped (already processed) {video_path}",
-                    ),
-                )
-                continue
-        pending.append((video_index, video_path, vid_run_dir))
-
     def _process(item: tuple[int, Path, Path]) -> tuple[int, Path, VideoResult]:
         idx, vpath, rdir = item
         result = _process_single_video(
@@ -435,43 +414,82 @@ def scan_videos(
             video_index=idx,
             config=config,
             detector=detector,
-            progress_callback=None,  # progress emitted after completion below
+            progress_callback=None,
         )
         return idx, rdir, result
 
-    # Process videos in parallel (I/O extraction overlaps with GPU inference)
+    def _handle_completed(future) -> None:
+        video_index, vid_run_dir, result = future.result()
+        results.append(result)
+
+        # persist result to report.json immediately
+        append_result_to_report(vid_run_dir, result, config=config)
+        processed_cache.setdefault(vid_run_dir, set()).add(result.video_path)
+
+        # persist to grouped CSV immediately if to_delete
+        if result.to_delete:
+            date_folder = vid_run_dir.name
+            csv_path = vid_run_dir / f"{date_folder}.csv"
+            export_rows = build_empty_video_export_rows([result.to_report_row()])
+            if export_rows:
+                _append_unique_csv_rows(
+                    csv_path,
+                    export_rows,
+                    fieldnames=EMPTY_VIDEO_EXPORT_FIELDNAMES,
+                    unique_field="host_path",
+                )
+
+        _emit(
+            progress_callback,
+            ScanProgress(
+                phase="video_completed",
+                video_index=video_index,
+                video_path=result.video_path,
+                message=f"Completed {result.relative_path} | to_delete={result.to_delete}",
+            ),
+        )
+
+    # Stream videos into the pool as we walk the NAS: submit while discovering,
+    # drain completed futures immediately so progress is logged as work finishes.
     with ThreadPoolExecutor(max_workers=PARALLEL_VIDEOS) as pool:
-        futures = {pool.submit(_process, item): item for item in pending}
-        for future in as_completed(futures):
-            video_index, vid_run_dir, result = future.result()
-            results.append(result)
+        in_flight: set = set()
+        max_in_flight = PARALLEL_VIDEOS * 2  # bounded queue: backpressure
 
-            # persist result to report.json immediately
-            append_result_to_report(vid_run_dir, result, config=config)
-            processed_cache.setdefault(vid_run_dir, set()).add(result.video_path)
-
-            # persist to grouped CSV immediately if to_delete
-            if result.to_delete:
-                date_folder = vid_run_dir.name
-                csv_path = vid_run_dir / f"{date_folder}.csv"
-                export_rows = build_empty_video_export_rows([result.to_report_row()])
-                if export_rows:
-                    _append_unique_csv_rows(
-                        csv_path,
-                        export_rows,
-                        fieldnames=EMPTY_VIDEO_EXPORT_FIELDNAMES,
-                        unique_field="host_path",
+        for video_index, video_path in enumerate(video_iter, start=1):
+            vid_run_dir = run_dir_for_video(config.output_root, config.data_root, video_path)
+            # check if already processed (skip check when force_rescan is enabled)
+            if not config.force_rescan:
+                if vid_run_dir not in processed_cache:
+                    processed_cache[vid_run_dir] = load_processed_video_paths(vid_run_dir)
+                if str(video_path) in processed_cache[vid_run_dir]:
+                    _emit(
+                        progress_callback,
+                        ScanProgress(
+                            phase="video_completed",
+                            video_index=video_index,
+                            video_path=str(video_path),
+                            message=f"Skipped (already processed) {video_path}",
+                        ),
                     )
+                    continue
 
-            _emit(
-                progress_callback,
-                ScanProgress(
-                    phase="video_completed",
-                    video_index=video_index,
-                    video_path=result.video_path,
-                    message=f"Completed {result.relative_path} | to_delete={result.to_delete}",
-                ),
-            )
+            # Drain any completed futures without blocking
+            done = {f for f in in_flight if f.done()}
+            for f in done:
+                _handle_completed(f)
+            in_flight -= done
+
+            # If queue is full, block until one completes
+            if len(in_flight) >= max_in_flight:
+                finished = next(as_completed(in_flight))
+                _handle_completed(finished)
+                in_flight.discard(finished)
+
+            in_flight.add(pool.submit(_process, (video_index, video_path, vid_run_dir)))
+
+        # Walk done — drain remaining futures
+        for future in as_completed(in_flight):
+            _handle_completed(future)
 
     _emit(
         progress_callback,
